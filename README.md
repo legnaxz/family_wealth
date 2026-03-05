@@ -6,6 +6,12 @@
 docker compose up --build
 ```
 
+Backend container boot command runs migrations automatically:
+
+```bash
+alembic upgrade head
+```
+
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000/docs
 
@@ -63,5 +69,11 @@ Response:
 
 ## Notes
 
-- For local MVP, `Base.metadata.create_all` is used (no Alembic yet).
-- Next step recommended: Alembic migrations + invitation token flow + 2FA.
+- Schema is now managed by Alembic (`backend/alembic`).
+- Useful commands:
+
+```bash
+cd backend
+alembic upgrade head
+alembic revision -m "your_change"
+```
