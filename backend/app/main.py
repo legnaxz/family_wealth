@@ -365,17 +365,40 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
     if "뱅샐현황" in wb.sheetnames:
         ws0 = wb["뱅샐현황"]
         as_of = date.today()
+
+        in_financial_section = False
         for row in ws0.iter_rows(min_row=1, values_only=True):
             vals = list(row)
+            line0 = str(vals[0]).strip() if len(vals) > 0 and vals[0] is not None else ""
+
+            if "3.재무현황" in line0:
+                in_financial_section = True
+                continue
+            if "4.보험현황" in line0:
+                in_financial_section = False
+                break
+            if not in_financial_section:
+                continue
+
             if len(vals) < 8:
                 continue
 
+            asset_type = str(vals[0]).strip() if vals[0] is not None else ""
             asset_name = str(vals[1]).strip() if vals[1] is not None else ""
+            liab_type = str(vals[4]).strip() if vals[4] is not None else ""
             liab_name = str(vals[5]).strip() if vals[5] is not None else ""
             asset_amount = _num(vals[3])
             liab_amount = _num(vals[7])
 
-            if asset_name and asset_name not in {"총자산", "자산"} and asset_amount != 0:
+            # 헤더/합계/빈행 제외
+            if asset_type in {"", "자산"} and liab_type in {"", "부채"}:
+                continue
+            if asset_name in {"", "총자산"}:
+                asset_amount = 0
+            if liab_name in {"", "총부채"}:
+                liab_amount = 0
+
+            if asset_name and asset_amount != 0:
                 a = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == asset_name))
                 if not a:
                     a = Asset(household_id=household_id, name=asset_name, category="sheet1")
@@ -384,7 +407,7 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
                 db.add(Valuation(household_id=household_id, asset_id=a.id, as_of_date=as_of, amount=asset_amount))
                 imported_assets += 1
 
-            if liab_name and liab_name not in {"총부채", "부채"} and liab_amount != 0:
+            if liab_name and liab_amount != 0:
                 l = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == liab_name))
                 if not l:
                     l = Liability(household_id=household_id, name=liab_name)
