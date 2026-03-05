@@ -23,7 +23,15 @@ from .models import (
     AuditLog,
 )
 from .schemas import UserCreate, LoginIn, TokenOut, HouseholdCreate, AccountCreate, AssetCreate, LiabilityCreate, ValuationCreate
-from .security import hash_password, verify_password, create_access_token, decode_access_token
+from .security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    decode_access_token,
+    generate_totp_secret,
+    verify_totp,
+    totp_uri,
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -119,7 +127,31 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == payload.email))
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "invalid credentials")
+    if user.otp_enabled:
+        if not payload.otp_code or not user.otp_secret or not verify_totp(user.otp_secret, payload.otp_code):
+            raise HTTPException(401, "2fa code required or invalid")
     return {"access_token": create_access_token(user.id)}
+
+
+@app.post("/auth/2fa/setup")
+def setup_2fa(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.otp_enabled and user.otp_secret:
+        return {"secret": user.otp_secret, "otpauth_uri": totp_uri(user.otp_secret, user.email)}
+    secret = generate_totp_secret()
+    user.otp_secret = secret
+    db.commit()
+    return {"secret": secret, "otpauth_uri": totp_uri(secret, user.email)}
+
+
+@app.post("/auth/2fa/enable")
+def enable_2fa(code: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not user.otp_secret:
+        raise HTTPException(400, "2fa setup required")
+    if not verify_totp(user.otp_secret, code):
+        raise HTTPException(400, "invalid otp code")
+    user.otp_enabled = True
+    db.commit()
+    return {"ok": True, "otp_enabled": True}
 
 
 @app.post("/households")

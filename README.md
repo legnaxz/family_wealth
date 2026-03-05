@@ -12,6 +12,7 @@ docker compose up --build
 ## What is implemented now
 
 - JWT auth (register/login + Bearer required on protected APIs)
+- 2FA(TOTP) setup/enable + login OTP verification
 - Household RBAC (owner/admin/member/viewer)
 - Household member role upsert API
 - Invite token flow (create token / join household)
@@ -29,8 +30,9 @@ docker compose up --build
 ## Core API flow
 
 1. `POST /auth/register` or `POST /auth/login`
-2. use `Authorization: Bearer <token>`
-3. `POST /households`
+2. (선택) `POST /auth/2fa/setup` -> OTP 앱 등록 -> `POST /auth/2fa/enable?code=123456`
+3. use `Authorization: Bearer <token>`
+4. `POST /households`
 4. (선택) `POST /households/{id}/invite-tokens` → `POST /households/join?token=...`
 5. create assets/liabilities/valuations or upload xlsx
 6. `POST /snapshots/recompute?household_id=<id>`

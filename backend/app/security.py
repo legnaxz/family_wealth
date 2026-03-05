@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+import pyotp
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET = os.getenv("APP_SECRET", "change-me")
@@ -35,3 +36,15 @@ def decode_access_token(token: str) -> int:
         return int(sub)
     except (JWTError, ValueError) as e:
         raise ValueError("invalid token") from e
+
+
+def generate_totp_secret() -> str:
+    return pyotp.random_base32()
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    return pyotp.TOTP(secret).verify(code, valid_window=1)
+
+
+def totp_uri(secret: str, email: str, issuer: str = "FamilyWealth") -> str:
+    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=issuer)
