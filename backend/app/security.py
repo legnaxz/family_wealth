@@ -1,21 +1,22 @@
 import os
+import hashlib
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 import pyotp
 
-# Use pbkdf2_sha256 for local/dev stability (avoids bcrypt 72-byte input limit issues)
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 SECRET = os.getenv("APP_SECRET", "change-me")
 ALG = "HS256"
 
 
 def hash_password(raw: str) -> str:
-    return pwd_context.hash(raw)
+    # local-only simple hash mode
+    return "sha256$" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def verify_password(raw: str, hashed: str) -> bool:
-    return pwd_context.verify(raw, hashed)
+    if hashed.startswith("sha256$"):
+        return hash_password(raw) == hashed
+    return False
 
 
 def create_access_token(user_id: int, expires_hours: int = 24) -> str:
