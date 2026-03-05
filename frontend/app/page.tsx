@@ -36,6 +36,7 @@ export default function Page() {
 
   const latestNetWorth = useMemo(() => rows?.[rows.length - 1]?.netWorth ?? 0, [rows])
   const monthOptions = useMemo(() => (monthly || []).map((m: any) => m.month), [monthly])
+  const monthlyFromStart = useMemo(() => (monthly || []).filter((m: any) => (m.month || '') >= '2025-03'), [monthly])
 
   async function bootstrap() { await fetch(`${API}/local/bootstrap`, { method: 'POST' }) }
 
@@ -223,6 +224,38 @@ export default function Page() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+        <div style={card}>
+          <h3 style={{ margin: '0 0 8px', color: THEME.income }}>수입 흐름 (2025-03 ~)</h3>
+          <div style={{ width: '100%', height: 180 }}>
+            <ResponsiveContainer>
+              <LineChart data={monthlyFromStart}>
+                <CartesianGrid strokeDasharray='3 3' />
+                <XAxis dataKey='month' tick={{ fontSize: 11 }} />
+                <YAxis width={92} tickFormatter={(v) => `+${won(Number(v))}`} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: any) => `+${won(Number(v))}`} />
+                <Line type='monotone' dataKey='income' stroke={THEME.income} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div style={card}>
+          <h3 style={{ margin: '0 0 8px', color: THEME.expense }}>지출 흐름 (2025-03 ~)</h3>
+          <div style={{ width: '100%', height: 180 }}>
+            <ResponsiveContainer>
+              <LineChart data={monthlyFromStart}>
+                <CartesianGrid strokeDasharray='3 3' />
+                <XAxis dataKey='month' tick={{ fontSize: 11 }} />
+                <YAxis width={92} tickFormatter={(v) => `-${won(Number(v))}`} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: any) => `-${won(Number(v))}`} />
+                <Line type='monotone' dataKey='expense' stroke={THEME.expense} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </section>
