@@ -660,49 +660,77 @@ def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), 
 @app.get("/households/{household_id}/flow")
 def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
+
     rows = db.execute(
         select(Transaction.tx_type, Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
         .where(Transaction.household_id == household_id)
         .group_by(Transaction.tx_type, Transaction.category)
     ).all()
 
-    bucket: dict[str, list[tuple[str, float]]] = {"수입": [], "지출": [], "이체": []}
+    incomes: list[tuple[str, float]] = []
+    expenses: list[tuple[str, float]] = []
+    transfer_total = 0.0
+
     for tx_type, category, amt in rows:
-        tx_type = tx_type or "이체"
-        if tx_type not in bucket:
-            bucket[tx_type] = []
-        bucket[tx_type].append((category or "미분류", abs(float(amt))))
+        v = abs(float(amt))
+        if v <= 0:
+            continue
+        c = category or "미분류"
+        if tx_type == "수입":
+            incomes.append((c, v))
+        elif tx_type == "지출":
+            expenses.append((c, v))
+        else:
+            transfer_total += v
 
-    # 가독성: 각 타입별 상위 8개만 노출 + 나머지 "기타"
-    compact: dict[str, list[tuple[str, float]]] = {}
-    for t, items in bucket.items():
+    def top_n(items: list[tuple[str, float]], n: int = 8) -> list[tuple[str, float]]:
         items = sorted(items, key=lambda x: x[1], reverse=True)
-        top = items[:8]
-        tail_sum = sum(v for _, v in items[8:])
-        if tail_sum > 0:
-            top.append(("기타", tail_sum))
-        compact[t] = top
+        top = items[:n]
+        remain = sum(v for _, v in items[n:])
+        if remain > 0:
+            top.append(("기타", remain))
+        return top
 
-    nodes = [{"name": "수입"}, {"name": "지출"}, {"name": "이체"}, {"name": "순자산"}]
+    incomes = top_n(incomes)
+    expenses = top_n(expenses)
+
+    total_income = sum(v for _, v in incomes)
+    total_expense = sum(v for _, v in expenses)
+    net = total_income - total_expense
+
+    nodes = [
+        {"name": "총수입"},
+        {"name": "총지출"},
+        {"name": "순현금흐름"},
+        {"name": "흑자" if net >= 0 else "적자"},
+    ]
     idx = {n["name"]: i for i, n in enumerate(nodes)}
     links = []
 
-    for tx_type, items in compact.items():
-        for category, v in items:
-            if v <= 0:
-                continue
-            cat_node = f"{tx_type}>{category}"
-            if cat_node not in idx:
-                idx[cat_node] = len(nodes)
-                nodes.append({"name": cat_node})
+    for cat, v in incomes:
+        nm = f"수입·{cat}"
+        idx[nm] = len(nodes)
+        nodes.append({"name": nm})
+        links.append({"source": idx[nm], "target": idx["총수입"], "value": v})
 
-            links.append({"source": idx[tx_type], "target": idx[cat_node], "value": v})
-            if tx_type == "수입":
-                links.append({"source": idx[cat_node], "target": idx["순자산"], "value": v})
-            elif tx_type == "지출":
-                links.append({"source": idx["순자산"], "target": idx[cat_node], "value": v})
+    for cat, v in expenses:
+        nm = f"지출·{cat}"
+        idx[nm] = len(nodes)
+        nodes.append({"name": nm})
+        links.append({"source": idx["총지출"], "target": idx[nm], "value": v})
 
-    return {"nodes": nodes, "links": links}
+    if total_income > 0:
+        links.append({"source": idx["총수입"], "target": idx["순현금흐름"], "value": total_income})
+    if total_expense > 0:
+        links.append({"source": idx["순현금흐름"], "target": idx["총지출"], "value": total_expense})
+    if abs(net) > 0:
+        links.append({"source": idx["순현금흐름"], "target": idx["흑자" if net >= 0 else "적자"], "value": abs(net)})
+    if transfer_total > 0:
+        idx["이체"] = len(nodes)
+        nodes.append({"name": "이체"})
+        links.append({"source": idx["이체"], "target": idx["순현금흐름"], "value": transfer_total})
+
+    return {"nodes": nodes, "links": links, "summary": {"income": total_income, "expense": total_expense, "net": net, "transfer": transfer_total}}
 
 
 @app.get("/households/{household_id}/net-worth")

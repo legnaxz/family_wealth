@@ -10,7 +10,10 @@ const API = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316']
 
 const won = (n: number) => `${Math.round(Number(n || 0)).toLocaleString()}원`
-const flowLabel = (name: string) => name.includes('>') ? name.split('>')[1] : name
+const flowLabel = (name: string) => {
+  if (name.startsWith('수입·') || name.startsWith('지출·')) return name.split('·')[1]
+  return name
+}
 
 const card: React.CSSProperties = {
   background: '#fff',
@@ -172,7 +175,12 @@ export default function Page() {
       </section>
 
       <section style={{ ...card, marginTop: 10 }}>
-        <h3 style={{ margin: '0 0 8px' }}>자산 흐름도 (금액 비중 반영)</h3>
+        <h3 style={{ margin: '0 0 8px' }}>현금흐름 브리지 (수입 → 순현금흐름 → 지출/흑자)</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, color: '#334155', fontSize: 13 }}>
+          <span>총수입: <b>{won(flow?.summary?.income || 0)}</b></span>
+          <span>총지출: <b>{won(flow?.summary?.expense || 0)}</b></span>
+          <span>순현금흐름: <b>{won(flow?.summary?.net || 0)}</b></span>
+        </div>
         <div style={{ width: '100%', height: 320 }}>
           {(flow?.nodes?.length || 0) > 1 && (flow?.links?.length || 0) > 0 ? (
             <ResponsiveContainer>
