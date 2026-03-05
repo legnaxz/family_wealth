@@ -9,6 +9,7 @@ docker compose up --build
 Backend container boot command runs migrations automatically.
 For quick UI-first local dev, auth can be disabled with `AUTH_DISABLED=true`.
 In this mode, app uses a fixed local household (id=1) and supports `/imports/xlsx-local`.
+Dashboard includes: net worth trend, monthly cashflow bar chart, monthly expense pie, and asset flow(Sankey).
 
 ```bash
 alembic upgrade head

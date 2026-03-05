@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from collections import defaultdict
 import hashlib
 import secrets
 import os
@@ -336,6 +337,46 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
 
     imported = 0
     skipped_duplicates = 0
+    imported_assets = 0
+    imported_liabilities = 0
+
+    # sheet1(뱅샐현황) 재무현황 파싱: 자산/부채 현재가치 적재
+    if "뱅샐현황" in wb.sheetnames:
+        ws0 = wb["뱅샐현황"]
+        as_of = date.today()
+        for row in ws0.iter_rows(min_row=1, values_only=True):
+            vals = [str(v).strip() if v is not None else "" for v in row]
+            # 기대 포맷: [자산분류, 자산명, ..., 자산금액, 부채분류, 부채명, ..., 부채금액]
+            if len(vals) < 8:
+                continue
+            asset_name = vals[1]
+            liab_name = vals[5]
+            try:
+                asset_amount = float(vals[3].replace(",", "")) if vals[3] not in {"", "0", "-"} else 0.0
+            except Exception:
+                asset_amount = 0.0
+            try:
+                liab_amount = float(vals[7].replace(",", "")) if vals[7] not in {"", "0", "-"} else 0.0
+            except Exception:
+                liab_amount = 0.0
+
+            if asset_name and asset_name not in {"", "총자산", "자산"} and asset_amount != 0:
+                a = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == asset_name))
+                if not a:
+                    a = Asset(household_id=household_id, name=asset_name, category="sheet1")
+                    db.add(a)
+                    db.flush()
+                db.add(Valuation(household_id=household_id, asset_id=a.id, as_of_date=as_of, amount=asset_amount))
+                imported_assets += 1
+
+            if liab_name and liab_name not in {"", "총부채", "부채"} and liab_amount != 0:
+                l = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == liab_name))
+                if not l:
+                    l = Liability(household_id=household_id, name=liab_name)
+                    db.add(l)
+                    db.flush()
+                db.add(Valuation(household_id=household_id, liability_id=l.id, as_of_date=as_of, amount=liab_amount))
+                imported_liabilities += 1
 
     if "가계부 내역" in wb.sheetnames:
         ws = wb["가계부 내역"]
@@ -413,10 +454,15 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
         "import",
         "xlsx",
         file.filename or "upload",
-        detail=f"imported={imported}, skipped_duplicates={skipped_duplicates}",
+        detail=f"transactions={imported}, skipped_duplicates={skipped_duplicates}, assets={imported_assets}, liabilities={imported_liabilities}",
     )
     db.commit()
-    return {"imported": imported, "skipped_duplicates": skipped_duplicates}
+    return {
+        "imported": imported,
+        "skipped_duplicates": skipped_duplicates,
+        "imported_assets": imported_assets,
+        "imported_liabilities": imported_liabilities,
+    }
 
 
 @app.post("/imports/xlsx-local")
@@ -573,6 +619,78 @@ def balances_by_payment_method(
         {"paymentMethod": r[0] or "(미지정)", "balance": float(r[1])}
         for r in rows
     ]
+
+
+@app.get("/households/{household_id}/cashflow/monthly")
+def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_household_role(db, household_id, user.id, "viewer")
+    rows = db.execute(
+        select(
+            func.strftime("%Y-%m", Transaction.tx_date).label("ym"),
+            Transaction.tx_type,
+            func.coalesce(func.sum(Transaction.amount), 0),
+        )
+        .where(Transaction.household_id == household_id)
+        .group_by(func.strftime("%Y-%m", Transaction.tx_date), Transaction.tx_type)
+        .order_by(func.strftime("%Y-%m", Transaction.tx_date).asc())
+    ).all()
+
+    agg: dict[str, dict[str, float]] = defaultdict(lambda: {"income": 0.0, "expense": 0.0, "transfer": 0.0})
+    for ym, tx_type, amt in rows:
+        if tx_type == "수입":
+            agg[ym]["income"] += float(amt)
+        elif tx_type == "지출":
+            agg[ym]["expense"] += abs(float(amt))
+        else:
+            agg[ym]["transfer"] += float(amt)
+
+    out = []
+    for ym in sorted(agg.keys()):
+        item = agg[ym]
+        out.append({
+            "month": ym,
+            "income": item["income"],
+            "expense": item["expense"],
+            "transfer": item["transfer"],
+            "cashflow": item["income"] - item["expense"],
+        })
+    return out
+
+
+@app.get("/households/{household_id}/flow")
+def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_household_role(db, household_id, user.id, "viewer")
+    rows = db.execute(
+        select(Transaction.tx_type, Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.household_id == household_id)
+        .group_by(Transaction.tx_type, Transaction.category)
+    ).all()
+
+    nodes = [{"name": "수입"}, {"name": "지출"}, {"name": "이체"}, {"name": "순자산"}]
+    idx = {n["name"]: i for i, n in enumerate(nodes)}
+    links = []
+
+    for tx_type, category, amt in rows:
+        cat = category or "미분류"
+        cat_node = f"{tx_type}:{cat}"
+        if cat_node not in idx:
+            idx[cat_node] = len(nodes)
+            nodes.append({"name": cat_node})
+
+        v = abs(float(amt))
+        if v == 0:
+            continue
+
+        links.append({"source": idx[tx_type], "target": idx[cat_node], "value": v})
+        if tx_type == "수입":
+            links.append({"source": idx[cat_node], "target": idx["순자산"], "value": v})
+        elif tx_type == "지출":
+            links.append({"source": idx["순자산"], "target": idx[cat_node], "value": v})
+        else:
+            # 이체는 순자산 영향 0으로 보고 정보성 링크만
+            pass
+
+    return {"nodes": nodes, "links": links}
 
 
 @app.get("/households/{household_id}/net-worth")
