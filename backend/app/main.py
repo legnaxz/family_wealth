@@ -49,6 +49,29 @@ app.add_middleware(
 ROLE_RANK = {"viewer": 1, "member": 2, "admin": 3, "owner": 4}
 
 
+def ensure_local_household(db: Session) -> tuple[User, Household]:
+    demo = db.scalar(select(User).where(User.email == "demo@local"))
+    if not demo:
+        demo = User(email="demo@local", password_hash=hash_password("demo"))
+        db.add(demo)
+        db.commit()
+        db.refresh(demo)
+
+    household = db.get(Household, 1)
+    if not household:
+        household = Household(id=1, name="우리집", owner_user_id=demo.id)
+        db.add(household)
+        db.commit()
+        db.refresh(household)
+
+    member = db.scalar(select(HouseholdMember).where(HouseholdMember.household_id == household.id, HouseholdMember.user_id == demo.id))
+    if not member:
+        db.add(HouseholdMember(household_id=household.id, user_id=demo.id, role="owner"))
+        db.commit()
+
+    return demo, household
+
+
 def excel_serial_to_date(value) -> date:
     if isinstance(value, date):
         return value
@@ -64,12 +87,7 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if AUTH_DISABLED:
-        demo = db.scalar(select(User).where(User.email == "demo@local"))
-        if not demo:
-            demo = User(email="demo@local", password_hash=hash_password("demo"))
-            db.add(demo)
-            db.commit()
-            db.refresh(demo)
+        demo, _ = ensure_local_household(db)
         return demo
 
     if not cred:
@@ -119,8 +137,17 @@ def audit(db: Session, household_id: int, actor_user_id: int, action: str, targe
 
 
 @app.get("/health")
-def health():
+def health(db: Session = Depends(get_db)):
+    if AUTH_DISABLED:
+        _, h = ensure_local_household(db)
+        return {"ok": True, "authDisabled": True, "householdId": h.id}
     return {"ok": True}
+
+
+@app.post("/local/bootstrap")
+def local_bootstrap(db: Session = Depends(get_db)):
+    demo, household = ensure_local_household(db)
+    return {"user": demo.email, "household_id": household.id, "household_name": household.name}
 
 
 @app.post("/auth/register", response_model=TokenOut)
@@ -298,7 +325,7 @@ def create_valuation(payload: ValuationCreate, user: User = Depends(get_current_
 
 
 @app.post("/imports/xlsx")
-def import_xlsx(household_id: int, file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "member")
     wb = load_workbook(file.file, data_only=True)
 
@@ -382,8 +409,14 @@ def import_xlsx(household_id: int, file: UploadFile = File(...), user: User = De
     return {"imported": imported, "skipped_duplicates": skipped_duplicates}
 
 
+@app.post("/imports/xlsx-local")
+def import_xlsx_local(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    demo, household = ensure_local_household(db)
+    return import_xlsx(household_id=household.id, file=file, user=demo, db=db)
+
+
 @app.post("/snapshots/recompute")
-def recompute_snapshots(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def recompute_snapshots(household_id: int = 1, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "member")
     dates = db.scalars(select(Valuation.as_of_date).where(Valuation.household_id == household_id).distinct()).all()
     count = 0
