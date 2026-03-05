@@ -143,7 +143,9 @@ def audit(db: Session, household_id: int, actor_user_id: int, action: str, targe
 def health(db: Session = Depends(get_db)):
     if AUTH_DISABLED:
         _, h = ensure_local_household(db)
-        return {"ok": True, "authDisabled": True, "householdId": h.id}
+        tx_count = db.scalar(select(func.count()).select_from(Transaction).where(Transaction.household_id == h.id)) or 0
+        snap_count = db.scalar(select(func.count()).select_from(NetWorthSnapshot).where(NetWorthSnapshot.household_id == h.id)) or 0
+        return {"ok": True, "authDisabled": True, "householdId": h.id, "transactions": int(tx_count), "snapshots": int(snap_count)}
     return {"ok": True}
 
 
