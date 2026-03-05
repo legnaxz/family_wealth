@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from openpyxl import load_workbook
 
-from .database import get_db
+from .database import get_db, Base, engine
 from .models import (
     User,
     Household,
@@ -50,6 +50,9 @@ ROLE_RANK = {"viewer": 1, "member": 2, "admin": 3, "owner": 4}
 
 
 def ensure_local_household(db: Session) -> tuple[User, Household]:
+    # local convenience: auto-create schema if migrations weren't run yet
+    Base.metadata.create_all(bind=engine)
+
     demo = db.scalar(select(User).where(User.email == "demo@local"))
     if not demo:
         demo = User(email="demo@local", password_hash=hash_password("demo"))
