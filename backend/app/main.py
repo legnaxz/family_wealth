@@ -86,6 +86,14 @@ def excel_serial_to_date(value) -> date:
         return date.fromisoformat(str(value))
 
 
+def norm_date(v) -> date:
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    return excel_serial_to_date(v)
+
+
 def get_current_user(
     cred: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
@@ -487,6 +495,7 @@ def recompute_snapshots(household_id: int = 1, user: User = Depends(get_current_
 
     # 재계산 시 기존 스냅샷을 지우고 한 번에 재생성(중복 충돌 방지)
     db.query(NetWorthSnapshot).filter(NetWorthSnapshot.household_id == household_id).delete()
+    db.flush()
 
     by_date: dict[date, dict[str, float]] = {}
 
@@ -500,6 +509,7 @@ def recompute_snapshots(household_id: int = 1, user: User = Depends(get_current_
 
     running = 0.0
     for d, day_sum in tx_rows:
+        d = norm_date(d)
         running += float(day_sum)
         by_date[d] = {
             "assets_total": running,
@@ -510,6 +520,7 @@ def recompute_snapshots(household_id: int = 1, user: User = Depends(get_current_
     # B) valuation(시트1) 값은 해당 날짜 스냅샷에 덮어써 최신 자산/부채 기준 반영
     val_dates = db.scalars(select(Valuation.as_of_date).where(Valuation.household_id == household_id).distinct()).all()
     for d in val_dates:
+        d = norm_date(d)
         assets_total = float(db.scalar(
             select(func.coalesce(func.sum(Valuation.amount), 0)).where(
                 Valuation.household_id == household_id,
