@@ -666,29 +666,41 @@ def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Se
         .group_by(Transaction.tx_type, Transaction.category)
     ).all()
 
+    bucket: dict[str, list[tuple[str, float]]] = {"수입": [], "지출": [], "이체": []}
+    for tx_type, category, amt in rows:
+        tx_type = tx_type or "이체"
+        if tx_type not in bucket:
+            bucket[tx_type] = []
+        bucket[tx_type].append((category or "미분류", abs(float(amt))))
+
+    # 가독성: 각 타입별 상위 8개만 노출 + 나머지 "기타"
+    compact: dict[str, list[tuple[str, float]]] = {}
+    for t, items in bucket.items():
+        items = sorted(items, key=lambda x: x[1], reverse=True)
+        top = items[:8]
+        tail_sum = sum(v for _, v in items[8:])
+        if tail_sum > 0:
+            top.append(("기타", tail_sum))
+        compact[t] = top
+
     nodes = [{"name": "수입"}, {"name": "지출"}, {"name": "이체"}, {"name": "순자산"}]
     idx = {n["name"]: i for i, n in enumerate(nodes)}
     links = []
 
-    for tx_type, category, amt in rows:
-        cat = category or "미분류"
-        cat_node = f"{tx_type}:{cat}"
-        if cat_node not in idx:
-            idx[cat_node] = len(nodes)
-            nodes.append({"name": cat_node})
+    for tx_type, items in compact.items():
+        for category, v in items:
+            if v <= 0:
+                continue
+            cat_node = f"{tx_type}>{category}"
+            if cat_node not in idx:
+                idx[cat_node] = len(nodes)
+                nodes.append({"name": cat_node})
 
-        v = abs(float(amt))
-        if v == 0:
-            continue
-
-        links.append({"source": idx[tx_type], "target": idx[cat_node], "value": v})
-        if tx_type == "수입":
-            links.append({"source": idx[cat_node], "target": idx["순자산"], "value": v})
-        elif tx_type == "지출":
-            links.append({"source": idx["순자산"], "target": idx[cat_node], "value": v})
-        else:
-            # 이체는 순자산 영향 0으로 보고 정보성 링크만
-            pass
+            links.append({"source": idx[tx_type], "target": idx[cat_node], "value": v})
+            if tx_type == "수입":
+                links.append({"source": idx[cat_node], "target": idx["순자산"], "value": v})
+            elif tx_type == "지출":
+                links.append({"source": idx["순자산"], "target": idx[cat_node], "value": v})
 
     return {"nodes": nodes, "links": links}
 
