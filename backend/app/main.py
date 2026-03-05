@@ -677,6 +677,43 @@ def category_share(
     return {"tx_type": tx_type, "total": total, "items": out}
 
 
+@app.get("/households/{household_id}/cashflow/daily")
+def daily_cashflow(
+    household_id: int,
+    year: int,
+    month: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_household_role(db, household_id, user.id, "viewer")
+    ym = f"{year:04d}-{month:02d}"
+
+    rows = db.execute(
+        select(Transaction.tx_date, Transaction.tx_type, func.coalesce(func.sum(Transaction.amount), 0))
+        .where(
+            Transaction.household_id == household_id,
+            func.strftime("%Y-%m", Transaction.tx_date) == ym,
+        )
+        .group_by(Transaction.tx_date, Transaction.tx_type)
+        .order_by(Transaction.tx_date.asc())
+    ).all()
+
+    by_day: dict[str, dict[str, float]] = defaultdict(lambda: {"income": 0.0, "expense": 0.0, "transfer": 0.0, "net": 0.0})
+    for d, tx_type, amt in rows:
+        key = norm_date(d).isoformat()
+        v = float(amt)
+        if tx_type == "수입":
+            by_day[key]["income"] += v
+            by_day[key]["net"] += v
+        elif tx_type == "지출":
+            by_day[key]["expense"] += abs(v)
+            by_day[key]["net"] -= abs(v)
+        else:
+            by_day[key]["transfer"] += v
+
+    return [{"date": k, **by_day[k]} for k in sorted(by_day.keys())]
+
+
 @app.get("/households/{household_id}/cashflow/monthly")
 def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")

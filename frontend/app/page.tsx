@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
-  Sankey,
 } from 'recharts'
 
 const API = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
@@ -14,10 +13,6 @@ const THEME = {
   expenseSoft: '#dbeafe',
 }
 const won = (n: number) => `₩${Math.round(Number(n || 0)).toLocaleString('ko-KR')}`
-const flowLabel = (name: string) => {
-  if (name.startsWith('수입·') || name.startsWith('지출·')) return name.split('·')[1]
-  return name
-}
 
 const card: React.CSSProperties = {
   background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14,
@@ -28,7 +23,7 @@ export default function Page() {
   const householdId = 1
   const [rows, setRows] = useState<any[]>([])
   const [monthly, setMonthly] = useState<any[]>([])
-  const [flow, setFlow] = useState<any>({ nodes: [], links: [], summary: {} })
+  const [daily, setDaily] = useState<any[]>([])
   const [expenseShare, setExpenseShare] = useState<any[]>([])
   const [incomeShare, setIncomeShare] = useState<any[]>([])
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
@@ -37,12 +32,29 @@ export default function Page() {
   const latestNetWorth = useMemo(() => rows?.[rows.length - 1]?.netWorth ?? 0, [rows])
   const monthOptions = useMemo(() => (monthly || []).map((m: any) => m.month), [monthly])
   const monthlyFromStart = useMemo(() => (monthly || []).filter((m: any) => (m.month || '') >= '2025-03'), [monthly])
+  const dailyMap = useMemo(() => {
+    const m: Record<string, any> = {}
+    for (const d of daily || []) m[d.date] = d
+    return m
+  }, [daily])
+  const calendarDays = useMemo(() => {
+    if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) return [] as any[]
+    const y = Number(selectedMonth.slice(0, 4))
+    const mo = Number(selectedMonth.slice(5, 7))
+    const lastDay = new Date(y, mo, 0).getDate()
+    const out = []
+    for (let day = 1; day <= lastDay; day++) {
+      const iso = `${selectedMonth}-${String(day).padStart(2, '0')}`
+      out.push({ day, iso, ...(dailyMap[iso] || { income: 0, expense: 0, net: 0 }) })
+    }
+    return out
+  }, [selectedMonth, dailyMap])
 
   async function bootstrap() { await fetch(`${API}/local/bootstrap`, { method: 'POST' }) }
 
   async function recompute() {
     await fetch(`${API}/snapshots/recompute?household_id=${householdId}`, { method: 'POST' })
-    await Promise.all([refresh(), loadFlow(), loadBalanceSheet(), loadMonthly()])
+    await Promise.all([refresh(), loadBalanceSheet(), loadMonthly()])
   }
 
   async function refresh() {
@@ -55,9 +67,12 @@ export default function Page() {
     setMonthly(await r.json())
   }
 
-  async function loadFlow() {
-    const r = await fetch(`${API}/households/${householdId}/flow`)
-    setFlow(await r.json())
+  async function loadDailyCashflow(monthKey: string) {
+    if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return
+    const y = Number(monthKey.slice(0, 4))
+    const m = Number(monthKey.slice(5, 7))
+    const r = await fetch(`${API}/households/${householdId}/cashflow/daily?year=${y}&month=${m}`)
+    setDaily(await r.json())
   }
 
   async function loadBalanceSheet() {
@@ -94,7 +109,10 @@ export default function Page() {
     if (!monthOptions.length) return
     const current = selectedMonth || monthOptions[monthOptions.length - 1]
     if (!selectedMonth) setSelectedMonth(current)
-    loadCategoryShare(current).catch(console.error)
+    Promise.all([
+      loadCategoryShare(current),
+      loadDailyCashflow(current),
+    ]).catch(console.error)
   }, [monthOptions, selectedMonth])
 
   return (
@@ -127,53 +145,23 @@ export default function Page() {
         </div>
 
         <div style={card}>
-          <h3 style={{ margin: '0 0 8px' }}>현금흐름</h3>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 8, fontSize: 13 }}>
-            <span style={{ color: THEME.income }}>수입 <b>{won(flow?.summary?.income || 0)}</b></span>
-            <span style={{ color: THEME.expense }}>지출 <b>{won(flow?.summary?.expense || 0)}</b></span>
-            <span>순흐름 <b>{won(flow?.summary?.net || 0)}</b></span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>현금흐름 달력</h3>
+            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '4px 8px' }}>
+              {monthOptions.map((m: string) => <option key={m} value={m}>{m}</option>)}
+            </select>
           </div>
-          <div style={{ width: '100%', height: 220 }}>
-            {(flow?.nodes?.length || 0) > 1 ? (
-              <ResponsiveContainer>
-                <Sankey
-                  data={{ nodes: (flow.nodes || []).map((n: any) => ({ ...n, name: flowLabel(n.name) })), links: flow.links || [] }}
-                  nodePadding={18}
-                  nodeWidth={12}
-                  iterations={64}
-                  link={{ stroke: '#9ca3af' }}
-                >
-                  <Tooltip formatter={(v: any) => won(Number(v))} />
-                </Sankey>
-              </ResponsiveContainer>
-            ) : <div style={{ color: '#64748b' }}>데이터가 없습니다.</div>}
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 6, marginBottom: 6 }}>
-            <span style={{ border: `1px solid ${THEME.income}`, color: THEME.income, borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>수입 흐름</span>
-            <span style={{ border: `1px solid ${THEME.expense}`, color: THEME.expense, borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>지출 흐름</span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-            <div>
-              <div style={{ fontSize: 12, color: THEME.income, marginBottom: 6 }}>수입 태그</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {(flow?.incomeBreakdown || []).slice(0, 8).map((x: any, i: number) => (
-                  <span key={i} style={{ border: `1px solid ${THEME.income}`, background: THEME.incomeSoft, color: '#7f1d1d', borderRadius: 999, padding: '2px 8px', fontSize: 12 }}>
-                    {x.category} {won(x.amount)}
-                  </span>
-                ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+            {['일','월','화','수','목','금','토'].map((d) => (
+              <div key={d} style={{ fontSize: 11, color: '#64748b', textAlign: 'center' }}>{d}</div>
+            ))}
+            {calendarDays.map((d: any) => (
+              <div key={d.iso} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 6, minHeight: 66, background: '#fff' }}>
+                <div style={{ fontSize: 11, color: '#334155', marginBottom: 4 }}>{d.day}</div>
+                {d.income > 0 && <div style={{ fontSize: 10, color: THEME.income }}>+{won(d.income)}</div>}
+                {d.expense > 0 && <div style={{ fontSize: 10, color: THEME.expense }}>-{won(d.expense)}</div>}
               </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: THEME.expense, marginBottom: 6 }}>지출 태그</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {(flow?.expenseBreakdown || []).slice(0, 8).map((x: any, i: number) => (
-                  <span key={i} style={{ border: `1px solid ${THEME.expense}`, background: THEME.expenseSoft, color: '#1e3a8a', borderRadius: 999, padding: '2px 8px', fontSize: 12 }}>
-                    {x.category} {won(x.amount)}
-                  </span>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -201,9 +189,7 @@ export default function Page() {
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>수입/지출 카테고리 비중</h3>
-            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '4px 8px' }}>
-              {monthOptions.map((m: string) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <span style={{ fontSize: 12, color: '#64748b' }}>{selectedMonth || '-'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
