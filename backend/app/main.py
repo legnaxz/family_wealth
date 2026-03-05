@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import secrets
+import os
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,7 +35,8 @@ from .security import (
 )
 
 app = FastAPI(title="Family Wealth MVP")
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+AUTH_DISABLED = os.getenv("AUTH_DISABLED", "false").lower() in {"1", "true", "yes"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,9 +60,20 @@ def excel_serial_to_date(value) -> date:
 
 
 def get_current_user(
-    cred: HTTPAuthorizationCredentials = Depends(security),
+    cred: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+    if AUTH_DISABLED:
+        demo = db.scalar(select(User).where(User.email == "demo@local"))
+        if not demo:
+            demo = User(email="demo@local", password_hash=hash_password("demo"))
+            db.add(demo)
+            db.commit()
+            db.refresh(demo)
+        return demo
+
+    if not cred:
+        raise HTTPException(401, "missing access token")
     try:
         user_id = decode_access_token(cred.credentials)
     except ValueError:
@@ -82,6 +95,8 @@ def get_household_role(db: Session, household_id: int, user_id: int) -> str | No
 
 
 def require_household_role(db: Session, household_id: int, user_id: int, minimum_role: str) -> str:
+    if AUTH_DISABLED:
+        return "owner"
     role = get_household_role(db, household_id, user_id)
     if not role:
         raise HTTPException(403, "not a household member")

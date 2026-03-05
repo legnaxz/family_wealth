@@ -9,7 +9,7 @@ export default function Page() {
   const [email, setEmail] = useState('test@example.com')
   const [password, setPassword] = useState('test1234')
   const [otpCode, setOtpCode] = useState('')
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState('demo')
   const [inviteToken, setInviteToken] = useState('')
   const [householdId, setHouseholdId] = useState(1)
   const [rows, setRows] = useState<any[]>([])

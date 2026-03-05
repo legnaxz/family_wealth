@@ -6,7 +6,8 @@
 docker compose up --build
 ```
 
-Backend container boot command runs migrations automatically:
+Backend container boot command runs migrations automatically.
+For quick UI-first local dev, auth can be disabled with `AUTH_DISABLED=true`.
 
 ```bash
 alembic upgrade head

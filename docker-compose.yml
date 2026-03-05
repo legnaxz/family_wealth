@@ -22,6 +22,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_SECRET: change-me
       FRONTEND_ORIGIN: http://localhost:3000
+      AUTH_DISABLED: "true"
     depends_on:
       - postgres
       - redis
