@@ -94,8 +94,8 @@ export default function Page() {
             <ResponsiveContainer>
               <LineChart data={rows}>
                 <CartesianGrid strokeDasharray='3 3' />
-                <XAxis dataKey='date' hide />
-                <YAxis width={70} />
+                <XAxis dataKey='date' tick={{ fontSize: 11 }} minTickGap={24} />
+                <YAxis width={92} tickFormatter={(v) => won(Number(v))} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: any) => won(Number(v))} />
                 <Line type='monotone' dataKey='netWorth' stroke='#16a34a' strokeWidth={2} dot={false} />
               </LineChart>
