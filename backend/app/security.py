@@ -4,7 +4,8 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 import pyotp
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 for local/dev stability (avoids bcrypt 72-byte input limit issues)
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 SECRET = os.getenv("APP_SECRET", "change-me")
 ALG = "HS256"
 
