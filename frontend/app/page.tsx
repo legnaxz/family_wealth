@@ -18,9 +18,18 @@ const card: React.CSSProperties = {
   background: '#fff',
   border: '1px solid #e5e7eb',
   borderRadius: 14,
-  boxShadow: '0 4px 14px rgba(15,23,42,0.06)',
+  boxShadow: '0 6px 18px rgba(15,23,42,0.08)',
   padding: 14,
 }
+
+const badge = (bg: string, color: string): React.CSSProperties => ({
+  background: bg,
+  color,
+  borderRadius: 999,
+  padding: '2px 10px',
+  fontSize: 12,
+  fontWeight: 700,
+})
 
 export default function Page() {
   const householdId = 1
@@ -32,6 +41,12 @@ export default function Page() {
 
   const latestNetWorth = useMemo(() => rows?.[rows.length - 1]?.netWorth ?? 0, [rows])
   const latestMonth = useMemo(() => monthly?.[monthly.length - 1] ?? null, [monthly])
+  const prevMonth = useMemo(() => monthly?.[monthly.length - 2] ?? null, [monthly])
+  const cashDelta = useMemo(() => {
+    const cur = Number(latestMonth?.cashflow || 0)
+    const prev = Number(prevMonth?.cashflow || 0)
+    return cur - prev
+  }, [latestMonth, prevMonth])
 
   async function refresh() {
     const res = await fetch(`${API}/households/${householdId}/net-worth`)
@@ -126,8 +141,29 @@ export default function Page() {
         </div>
 
         <div style={card}>
-          <h3 style={{ margin: '0 0 8px' }}>월별 현금흐름 (최근 12개월)</h3>
-          <div style={{ width: '100%', height: 250 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>월별 현금흐름 (최근 12개월)</h3>
+            <span style={cashDelta >= 0 ? badge('#dcfce7', '#166534') : badge('#fee2e2', '#991b1b')}>
+              전월 대비 {cashDelta >= 0 ? '+' : ''}{won(cashDelta)}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 8 }}>
+              <div style={{ fontSize: 12, color: '#166534' }}>당월 수입</div>
+              <b>{won(latestMonth?.income || 0)}</b>
+            </div>
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 8 }}>
+              <div style={{ fontSize: 12, color: '#991b1b' }}>당월 지출</div>
+              <b>{won(latestMonth?.expense || 0)}</b>
+            </div>
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 8 }}>
+              <div style={{ fontSize: 12, color: '#1d4ed8' }}>당월 순현금</div>
+              <b>{won(latestMonth?.cashflow || 0)}</b>
+            </div>
+          </div>
+
+          <div style={{ width: '100%', height: 220 }}>
             <ResponsiveContainer>
               <BarChart data={monthly.slice(-12)}>
                 <CartesianGrid strokeDasharray='3 3' />
@@ -135,8 +171,8 @@ export default function Page() {
                 <YAxis width={70} />
                 <Tooltip formatter={(v: any) => won(Number(v))} />
                 <Legend />
-                <Bar dataKey='income' fill='#10b981' name='수입' />
-                <Bar dataKey='expense' fill='#ef4444' name='지출' />
+                <Bar dataKey='income' fill='#10b981' name='수입' radius={[6, 6, 0, 0]} />
+                <Bar dataKey='expense' fill='#ef4444' name='지출' radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -178,7 +214,14 @@ export default function Page() {
       </section>
 
       <section style={{ ...card, marginTop: 10 }}>
-        <h3 style={{ margin: '0 0 8px' }}>현금흐름 브리지 (수입 → 순현금흐름 → 지출/흑자)</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h3 style={{ margin: 0 }}>현금흐름 브리지 (수입 → 순현금흐름 → 지출/흑자)</h3>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <span style={badge('#dcfce7', '#166534')}>수입 흐름</span>
+            <span style={badge('#fee2e2', '#991b1b')}>지출 흐름</span>
+            <span style={badge('#e0e7ff', '#3730a3')}>최종 잔여</span>
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, color: '#334155', fontSize: 13 }}>
           <span>총수입: <b>{won(flow?.summary?.income || 0)}</b></span>
           <span>총지출: <b>{won(flow?.summary?.expense || 0)}</b></span>
