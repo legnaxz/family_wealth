@@ -9,12 +9,34 @@ docker compose up --build
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000/docs
 
-## XLSX import format (active sheet)
+## What is implemented now
 
-| date       | type      | name            | amount   |
-|------------|-----------|-----------------|----------|
-| 2026-03-01 | asset     | KB Bank         | 12000000 |
-| 2026-03-01 | liability | Mortgage        | 30000000 |
+- JWT auth (register/login + Bearer required on protected APIs)
+- Household RBAC (owner/admin/member/viewer)
+- Household member role upsert API
+- Household/account/asset/liability/valuation create APIs
+- Net worth snapshots recompute API
+- Net worth chart web page
+- XLSX import
+  - **Real format support**: `가계부 내역` sheet import to `transactions`
+  - Idempotent by `tx_hash` unique key (duplicate re-upload skip)
+  - Fallback support: simple `date,type,name,amount` format to valuations
+- Audit log table
+
+## Core API flow
+
+1. `POST /auth/register` or `POST /auth/login`
+2. use `Authorization: Bearer <token>`
+3. `POST /households`
+4. create assets/liabilities/valuations or upload xlsx
+5. `POST /snapshots/recompute?household_id=<id>`
+6. `GET /households/{id}/net-worth`
+
+## XLSX import (actual provided file)
+
+If workbook has sheet name `가계부 내역`, this schema is parsed:
+
+| 날짜 | 시간 | 타입 | 대분류 | 소분류 | 내용 | 금액 | 화폐 | 결제수단 | 메모 |
 
 Upload endpoint:
 
@@ -22,17 +44,16 @@ Upload endpoint:
 
 Form-data key: `file`
 
-## Phase 1 included
-- Auth(register/login)
-- Household/account/asset/liability/valuation create APIs
-- Net worth snapshots recompute API
-- Net worth chart web page
-- XLSX import (basic)
-- Audit log table
+Response:
 
-## TODO (next)
-- 실제 JWT 인증 미들웨어 연결
-- RBAC(owner/admin/member/viewer)
-- transactions + 자동 잔액 계산
-- 초대 토큰, 2FA
-- 백업 스케줄러 + restore 리허설 스크립트
+```json
+{
+  "imported": 123,
+  "skipped_duplicates": 45
+}
+```
+
+## Notes
+
+- For local MVP, `Base.metadata.create_all` is used (no Alembic yet).
+- Next step recommended: Alembic migrations + invitation token flow + 2FA.
