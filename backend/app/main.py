@@ -753,6 +753,51 @@ def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Se
     return {"nodes": nodes, "links": links, "summary": {"income": total_income, "expense": total_expense, "net": net, "transfer": transfer_total}}
 
 
+@app.get("/households/{household_id}/balance-sheet")
+def balance_sheet(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_household_role(db, household_id, user.id, "viewer")
+
+    latest_date = db.scalar(select(func.max(Valuation.as_of_date)).where(Valuation.household_id == household_id))
+    if not latest_date:
+        return {"asOf": None, "assetsTotal": 0, "liabilitiesTotal": 0, "assets": [], "liabilities": []}
+
+    asset_rows = db.execute(
+        select(Asset.name, func.coalesce(func.sum(Valuation.amount), 0))
+        .join(Asset, Asset.id == Valuation.asset_id)
+        .where(Valuation.household_id == household_id, Valuation.as_of_date == latest_date)
+        .group_by(Asset.name)
+        .order_by(func.sum(Valuation.amount).desc())
+    ).all()
+
+    liability_rows = db.execute(
+        select(Liability.name, func.coalesce(func.sum(Valuation.amount), 0))
+        .join(Liability, Liability.id == Valuation.liability_id)
+        .where(Valuation.household_id == household_id, Valuation.as_of_date == latest_date)
+        .group_by(Liability.name)
+        .order_by(func.sum(Valuation.amount).desc())
+    ).all()
+
+    assets_total = sum(float(v) for _, v in asset_rows)
+    liabilities_total = sum(float(v) for _, v in liability_rows)
+
+    assets = [
+        {"name": n, "value": float(v), "weight": round((float(v) / assets_total * 100), 2) if assets_total > 0 else 0}
+        for n, v in asset_rows
+    ]
+    liabilities = [
+        {"name": n, "value": float(v), "weight": round((float(v) / liabilities_total * 100), 2) if liabilities_total > 0 else 0}
+        for n, v in liability_rows
+    ]
+
+    return {
+        "asOf": latest_date.isoformat(),
+        "assetsTotal": assets_total,
+        "liabilitiesTotal": liabilities_total,
+        "assets": assets,
+        "liabilities": liabilities,
+    }
+
+
 @app.get("/households/{household_id}/net-worth")
 def net_worth(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
