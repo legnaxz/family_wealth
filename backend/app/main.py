@@ -485,7 +485,10 @@ def import_xlsx_local(file: UploadFile = File(...), db: Session = Depends(get_db
 def recompute_snapshots(household_id: int = 1, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "member")
 
-    count = 0
+    # 재계산 시 기존 스냅샷을 지우고 한 번에 재생성(중복 충돌 방지)
+    db.query(NetWorthSnapshot).filter(NetWorthSnapshot.household_id == household_id).delete()
+
+    by_date: dict[date, dict[str, float]] = {}
 
     # A) 거래 기반 일자 누적 순자산(타임라인)
     tx_rows = db.execute(
@@ -498,62 +501,47 @@ def recompute_snapshots(household_id: int = 1, user: User = Depends(get_current_
     running = 0.0
     for d, day_sum in tx_rows:
         running += float(day_sum)
-        existing = db.scalar(
-            select(NetWorthSnapshot).where(NetWorthSnapshot.household_id == household_id, NetWorthSnapshot.snapshot_date == d)
-        )
-        if existing:
-            existing.assets_total = running
-            existing.liabilities_total = 0
-            existing.net_worth = running
-        else:
-            db.add(
-                NetWorthSnapshot(
-                    household_id=household_id,
-                    snapshot_date=d,
-                    assets_total=running,
-                    liabilities_total=0,
-                    net_worth=running,
-                )
-            )
-        count += 1
+        by_date[d] = {
+            "assets_total": running,
+            "liabilities_total": 0.0,
+            "net_worth": running,
+        }
 
     # B) valuation(시트1) 값은 해당 날짜 스냅샷에 덮어써 최신 자산/부채 기준 반영
     val_dates = db.scalars(select(Valuation.as_of_date).where(Valuation.household_id == household_id).distinct()).all()
     for d in val_dates:
-        assets_total = db.scalar(
+        assets_total = float(db.scalar(
             select(func.coalesce(func.sum(Valuation.amount), 0)).where(
                 Valuation.household_id == household_id,
                 Valuation.as_of_date == d,
                 Valuation.asset_id.is_not(None),
             )
-        )
-        liabilities_total = db.scalar(
+        ) or 0)
+        liabilities_total = float(db.scalar(
             select(func.coalesce(func.sum(Valuation.amount), 0)).where(
                 Valuation.household_id == household_id,
                 Valuation.as_of_date == d,
                 Valuation.liability_id.is_not(None),
             )
-        )
-        net = float(assets_total) - float(liabilities_total)
-        existing = db.scalar(
-            select(NetWorthSnapshot).where(NetWorthSnapshot.household_id == household_id, NetWorthSnapshot.snapshot_date == d)
-        )
-        if existing:
-            existing.assets_total = assets_total
-            existing.liabilities_total = liabilities_total
-            existing.net_worth = net
-        else:
-            db.add(
-                NetWorthSnapshot(
-                    household_id=household_id,
-                    snapshot_date=d,
-                    assets_total=assets_total,
-                    liabilities_total=liabilities_total,
-                    net_worth=net,
-                )
-            )
-            count += 1
+        ) or 0)
+        net = assets_total - liabilities_total
+        by_date[d] = {
+            "assets_total": assets_total,
+            "liabilities_total": liabilities_total,
+            "net_worth": net,
+        }
 
+    for d in sorted(by_date.keys()):
+        item = by_date[d]
+        db.add(NetWorthSnapshot(
+            household_id=household_id,
+            snapshot_date=d,
+            assets_total=item["assets_total"],
+            liabilities_total=item["liabilities_total"],
+            net_worth=item["net_worth"],
+        ))
+
+    count = len(by_date)
     audit(db, household_id, user.id, "recompute", "net_worth_snapshots", str(count))
     db.commit()
     return {"snapshots": count}
