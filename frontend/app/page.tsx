@@ -130,9 +130,13 @@ export default function Page() {
 
       <h3>자산 플로우 차트 (수입/지출/이체 → 카테고리 → 순자산)</h3>
       <div style={{ width: '100%', height: 420 }}>
-        <ResponsiveContainer>
-          <Sankey data={flow} nodePadding={24} nodeWidth={14} link={{ stroke: '#94a3b8' }} />
-        </ResponsiveContainer>
+        {(flow?.nodes?.length || 0) > 1 && (flow?.links?.length || 0) > 0 ? (
+          <ResponsiveContainer>
+            <Sankey data={flow} nodePadding={24} nodeWidth={14} link={{ stroke: '#94a3b8' }} />
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ padding: 16, color: '#64748b' }}>플로우 데이터가 아직 없어. 업로드 후 "전체 재계산/새로고침"을 눌러줘.</div>
+        )}
       </div>
 
       <h3>결제수단 잔액 집계</h3>
