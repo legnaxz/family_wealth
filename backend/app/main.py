@@ -341,26 +341,33 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
     imported_liabilities = 0
 
     # sheet1(뱅샐현황) 재무현황 파싱: 자산/부채 현재가치 적재
+    def _num(v) -> float:
+        if v is None:
+            return 0.0
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).strip().replace(",", "")
+        if s in {"", "-"}:
+            return 0.0
+        try:
+            return float(s)
+        except Exception:
+            return 0.0
+
     if "뱅샐현황" in wb.sheetnames:
         ws0 = wb["뱅샐현황"]
         as_of = date.today()
         for row in ws0.iter_rows(min_row=1, values_only=True):
-            vals = [str(v).strip() if v is not None else "" for v in row]
-            # 기대 포맷: [자산분류, 자산명, ..., 자산금액, 부채분류, 부채명, ..., 부채금액]
+            vals = list(row)
             if len(vals) < 8:
                 continue
-            asset_name = vals[1]
-            liab_name = vals[5]
-            try:
-                asset_amount = float(vals[3].replace(",", "")) if vals[3] not in {"", "0", "-"} else 0.0
-            except Exception:
-                asset_amount = 0.0
-            try:
-                liab_amount = float(vals[7].replace(",", "")) if vals[7] not in {"", "0", "-"} else 0.0
-            except Exception:
-                liab_amount = 0.0
 
-            if asset_name and asset_name not in {"", "총자산", "자산"} and asset_amount != 0:
+            asset_name = str(vals[1]).strip() if vals[1] is not None else ""
+            liab_name = str(vals[5]).strip() if vals[5] is not None else ""
+            asset_amount = _num(vals[3])
+            liab_amount = _num(vals[7])
+
+            if asset_name and asset_name not in {"총자산", "자산"} and asset_amount != 0:
                 a = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == asset_name))
                 if not a:
                     a = Asset(household_id=household_id, name=asset_name, category="sheet1")
@@ -369,7 +376,7 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
                 db.add(Valuation(household_id=household_id, asset_id=a.id, as_of_date=as_of, amount=asset_amount))
                 imported_assets += 1
 
-            if liab_name and liab_name not in {"", "총부채", "부채"} and liab_amount != 0:
+            if liab_name and liab_name not in {"총부채", "부채"} and liab_amount != 0:
                 l = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == liab_name))
                 if not l:
                     l = Liability(household_id=household_id, name=liab_name)
@@ -377,6 +384,9 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
                     db.flush()
                 db.add(Valuation(household_id=household_id, liability_id=l.id, as_of_date=as_of, amount=liab_amount))
                 imported_liabilities += 1
+
+        # sheet1 결과는 먼저 커밋(이후 거래중복 등으로 롤백되지 않게)
+        db.commit()
 
     if "가계부 내역" in wb.sheetnames:
         ws = wb["가계부 내역"]
@@ -750,7 +760,13 @@ def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Se
         nodes.append({"name": "이체"})
         links.append({"source": idx["이체"], "target": idx["순현금흐름"], "value": transfer_total})
 
-    return {"nodes": nodes, "links": links, "summary": {"income": total_income, "expense": total_expense, "net": net, "transfer": transfer_total}}
+    return {
+        "nodes": nodes,
+        "links": links,
+        "summary": {"income": total_income, "expense": total_expense, "net": net, "transfer": transfer_total},
+        "incomeBreakdown": [{"category": c, "amount": v} for c, v in incomes],
+        "expenseBreakdown": [{"category": c, "amount": v} for c, v in expenses],
+    }
 
 
 @app.get("/households/{household_id}/balance-sheet")

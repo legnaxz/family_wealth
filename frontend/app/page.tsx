@@ -125,6 +125,28 @@ export default function Page() {
               </ResponsiveContainer>
             ) : <div style={{ color: '#64748b' }}>데이터가 없습니다.</div>}
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+            <div>
+              <div style={{ fontSize: 12, color: '#166534', marginBottom: 6 }}>수입 태그</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(flow?.incomeBreakdown || []).slice(0, 8).map((x: any, i: number) => (
+                  <span key={i} style={{ border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', borderRadius: 999, padding: '2px 8px', fontSize: 12 }}>
+                    {x.category} {won(x.amount)}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#991b1b', marginBottom: 6 }}>지출 태그</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(flow?.expenseBreakdown || []).slice(0, 8).map((x: any, i: number) => (
+                  <span key={i} style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 999, padding: '2px 8px', fontSize: 12 }}>
+                    {x.category} {won(x.amount)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div style={card}>
