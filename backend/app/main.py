@@ -337,6 +337,7 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
 
     if "가계부 내역" in wb.sheetnames:
         ws = wb["가계부 내역"]
+        seen_hashes: set[str] = set()
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             # 날짜,시간,타입,대분류,소분류,내용,금액,화폐,결제수단,메모
             if not row or row[0] is None or row[2] is None or row[6] is None:
@@ -352,10 +353,14 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
 
             raw_key = f"{tx_date}|{tx_type}|{category}|{subcategory}|{content}|{amount}|{currency}|{payment_method}"
             tx_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+            if tx_hash in seen_hashes:
+                skipped_duplicates += 1
+                continue
             exists = db.scalar(select(Transaction).where(Transaction.household_id == household_id, Transaction.tx_hash == tx_hash))
             if exists:
                 skipped_duplicates += 1
                 continue
+            seen_hashes.add(tx_hash)
 
             db.add(
                 Transaction(
