@@ -714,6 +714,61 @@ def daily_cashflow(
     return [{"date": k, **by_day[k]} for k in sorted(by_day.keys())]
 
 
+@app.get("/households/{household_id}/cashflow/daily-report")
+def daily_report(
+    household_id: int,
+    day: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_household_role(db, household_id, user.id, "viewer")
+    target = norm_date(day)
+
+    rows = db.execute(
+        select(Transaction.tx_type, Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.household_id == household_id, Transaction.tx_date == target)
+        .group_by(Transaction.tx_type, Transaction.category)
+    ).all()
+
+    income = 0.0
+    expense = 0.0
+    by_cat = []
+    for tx_type, cat, amt in rows:
+        v = float(amt)
+        if tx_type == "수입":
+            income += v
+        elif tx_type == "지출":
+            expense += abs(v)
+        by_cat.append({"type": tx_type, "category": cat or "미분류", "amount": abs(v)})
+
+    txs = db.execute(
+        select(Transaction.tx_type, Transaction.category, Transaction.content, Transaction.amount, Transaction.payment_method)
+        .where(Transaction.household_id == household_id, Transaction.tx_date == target)
+        .order_by(func.abs(Transaction.amount).desc())
+        .limit(30)
+    ).all()
+
+    tx_list = [
+        {
+            "type": t[0],
+            "category": t[1] or "미분류",
+            "content": t[2] or "",
+            "amount": float(t[3]),
+            "paymentMethod": t[4] or "",
+        }
+        for t in txs
+    ]
+
+    return {
+        "date": target.isoformat(),
+        "income": income,
+        "expense": expense,
+        "net": income - expense,
+        "categories": by_cat,
+        "transactions": tx_list,
+    }
+
+
 @app.get("/households/{household_id}/cashflow/monthly")
 def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
