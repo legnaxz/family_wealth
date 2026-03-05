@@ -52,7 +52,11 @@ ROLE_RANK = {"viewer": 1, "member": 2, "admin": 3, "owner": 4}
 
 def ensure_local_household(db: Session) -> tuple[User, Household]:
     # local convenience: auto-create schema if migrations weren't run yet
-    Base.metadata.create_all(bind=engine)
+    # (sqlite race-safe: ignore "already exists" during concurrent bootstrap)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
 
     demo = db.scalar(select(User).where(User.email == "demo@local"))
     if not demo:
