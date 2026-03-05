@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, Legend, Sankey,
+  BarChart, Bar, Legend, Sankey,
 } from 'recharts'
 
 const API = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316']
 
 const won = (n: number) => `₩${Math.round(Number(n || 0)).toLocaleString('ko-KR')}`
 const flowLabel = (name: string) => {
@@ -26,8 +25,8 @@ const card: React.CSSProperties = {
 export default function Page() {
   const householdId = 1
   const [rows, setRows] = useState<any[]>([])
-  const [report, setReport] = useState<any>(null)
-  const [balances, setBalances] = useState<any[]>([])
+  const [expenseShare, setExpenseShare] = useState<any[]>([])
+  const [incomeShare, setIncomeShare] = useState<any[]>([])
   const [monthly, setMonthly] = useState<any[]>([])
   const [flow, setFlow] = useState<any>({ nodes: [], links: [] })
 
@@ -47,24 +46,23 @@ export default function Page() {
   async function recompute() {
     await fetch(`${API}/snapshots/recompute?household_id=${householdId}`, { method: 'POST' })
     await refresh()
-    await loadMonthlyReport()
-    await loadBalances()
+    await loadCategoryShare()
     await loadMonthlyCashflow()
     await loadFlow()
   }
 
-  async function loadMonthlyReport() {
+  async function loadCategoryShare() {
     const now = new Date()
     const y = now.getFullYear()
     const m = now.getMonth() + 1
-    const res = await fetch(`${API}/households/${householdId}/reports/monthly?year=${y}&month=${m}`)
-    setReport(await res.json())
-  }
 
-  async function loadBalances() {
-    const res = await fetch(`${API}/households/${householdId}/balances/by-payment-method`)
-    const json = await res.json()
-    setBalances(Array.isArray(json) ? json : [])
+    const eRes = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=지출`)
+    const eJson = await eRes.json()
+    setExpenseShare(Array.isArray(eJson?.items) ? eJson.items : [])
+
+    const iRes = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=수입`)
+    const iJson = await iRes.json()
+    setIncomeShare(Array.isArray(iJson?.items) ? iJson.items : [])
   }
 
   async function loadMonthlyCashflow() {
@@ -145,42 +143,34 @@ export default function Page() {
         </div>
 
         <div style={card}>
-          <h3 style={{ margin: '0 0 8px' }}>이번 달 지출 카테고리</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'center' }}>
-            <div style={{ width: '100%', height: 230 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={report?.expenseByCategory || []} dataKey='amount' nameKey='category' outerRadius={82}>
-                    {(report?.expenseByCategory || []).map((_: any, i: number) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: any) => won(Number(v))} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ maxHeight: 220, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start' }}>
-              {(report?.expenseByCategory || []).map((c: any, i: number) => (
-                <span key={i} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  border: '1px solid #e2e8f0', borderRadius: 999, padding: '4px 10px',
-                  fontSize: 12, background: '#fff'
-                }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: COLORS[i % COLORS.length], display: 'inline-block' }} />
-                  {c.category} · {won(c.amount)}
-                </span>
-              ))}
-            </div>
+          <h3 style={{ margin: '0 0 8px' }}>지출 카테고리 비중 (당월)</h3>
+          <div style={{ maxHeight: 250, overflow: 'auto', fontSize: 13 }}>
+            {expenseShare.slice(0, 12).map((c: any, i: number) => (
+              <div key={i} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span>{c.category}</span>
+                  <b>{c.weight}% · {won(c.amount)}</b>
+                </div>
+                <div style={{ height: 8, background: '#e2e8f0', borderRadius: 999 }}>
+                  <div style={{ width: `${Math.min(100, c.weight)}%`, height: 8, background: '#ef4444', borderRadius: 999 }} />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
         <div style={card}>
-          <h3 style={{ margin: '0 0 8px' }}>결제수단 잔액 Top</h3>
-          <div style={{ maxHeight: 250, overflow: 'auto', fontSize: 14 }}>
-            {(balances || []).slice(0, 12).map((b, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', padding: '7px 0' }}>
-                <span style={{ color: '#334155' }}>{b.paymentMethod}</span>
-                <b>{won(b.balance)}</b>
+          <h3 style={{ margin: '0 0 8px' }}>수입 카테고리 비중 (당월)</h3>
+          <div style={{ maxHeight: 250, overflow: 'auto', fontSize: 13 }}>
+            {incomeShare.slice(0, 12).map((c: any, i: number) => (
+              <div key={i} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span>{c.category}</span>
+                  <b>{c.weight}% · {won(c.amount)}</b>
+                </div>
+                <div style={{ height: 8, background: '#d1fae5', borderRadius: 999 }}>
+                  <div style={{ width: `${Math.min(100, c.weight)}%`, height: 8, background: '#10b981', borderRadius: 999 }} />
+                </div>
               </div>
             ))}
           </div>

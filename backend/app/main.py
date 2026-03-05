@@ -602,23 +602,43 @@ def monthly_report(
     }
 
 
-@app.get("/households/{household_id}/balances/by-payment-method")
-def balances_by_payment_method(
+@app.get("/households/{household_id}/category-share")
+def category_share(
     household_id: int,
+    year: int,
+    month: int,
+    tx_type: str = "지출",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     require_household_role(db, household_id, user.id, "viewer")
+    ym = f"{year:04d}-{month:02d}"
+
     rows = db.execute(
-        select(Transaction.payment_method, func.coalesce(func.sum(Transaction.amount), 0))
-        .where(Transaction.household_id == household_id)
-        .group_by(Transaction.payment_method)
-        .order_by(func.sum(Transaction.amount).desc())
+        select(Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
+        .where(
+            Transaction.household_id == household_id,
+            Transaction.tx_type == tx_type,
+            func.strftime("%Y-%m", Transaction.tx_date) == ym,
+        )
+        .group_by(Transaction.category)
     ).all()
-    return [
-        {"paymentMethod": r[0] or "(미지정)", "balance": float(r[1])}
-        for r in rows
-    ]
+
+    parsed = []
+    for c, amt in rows:
+        v = abs(float(amt))
+        if v <= 0:
+            continue
+        parsed.append({"category": c or "미분류", "amount": v})
+
+    parsed.sort(key=lambda x: x["amount"], reverse=True)
+    total = sum(x["amount"] for x in parsed)
+    out = []
+    for x in parsed:
+        weight = (x["amount"] / total * 100) if total > 0 else 0
+        out.append({**x, "weight": round(weight, 2)})
+
+    return {"tx_type": tx_type, "total": total, "items": out}
 
 
 @app.get("/households/{household_id}/cashflow/monthly")
