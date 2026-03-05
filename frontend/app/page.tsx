@@ -9,7 +9,7 @@ import {
 const API = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316']
 
-const won = (n: number) => `${Math.round(Number(n || 0)).toLocaleString()}원`
+const won = (n: number) => `₩${Math.round(Number(n || 0)).toLocaleString('ko-KR')}`
 const flowLabel = (name: string) => {
   if (name.startsWith('수입·') || name.startsWith('지출·')) return name.split('·')[1]
   return name
@@ -93,7 +93,7 @@ export default function Page() {
   }, [])
 
   return (
-    <main style={{ padding: 18, fontFamily: 'Inter, Pretendard, sans-serif', background: '#f8fafc' }}>
+    <main style={{ padding: 18, fontFamily: 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter, sans-serif', background: '#f8fafc' }}>
       <div style={{ ...card, marginBottom: 12, background: 'linear-gradient(90deg,#eff6ff,#f0fdf4)' }}>
         <h1 style={{ margin: 0, fontSize: 22 }}>우리집 자산 현황판</h1>
         <p style={{ margin: '6px 0 12px', color: '#475569' }}>순자산 추이 · 월별 현금흐름 · 지출 구조 · 자산 흐름을 한눈에 확인해요.</p>
@@ -120,7 +120,7 @@ export default function Page() {
                 <CartesianGrid strokeDasharray='3 3' />
                 <XAxis dataKey='date' hide />
                 <YAxis width={70} />
-                <Tooltip />
+                <Tooltip formatter={(v: any) => won(Number(v))} />
                 <Line type='monotone' dataKey='netWorth' stroke='#3b82f6' strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -135,7 +135,7 @@ export default function Page() {
                 <CartesianGrid strokeDasharray='3 3' />
                 <XAxis dataKey='month' />
                 <YAxis width={70} />
-                <Tooltip />
+                <Tooltip formatter={(v: any) => won(Number(v))} />
                 <Legend />
                 <Bar dataKey='income' fill='#10b981' name='수입' />
                 <Bar dataKey='expense' fill='#ef4444' name='지출' />
@@ -146,18 +146,31 @@ export default function Page() {
 
         <div style={card}>
           <h3 style={{ margin: '0 0 8px' }}>이번 달 지출 카테고리</h3>
-          <div style={{ width: '100%', height: 250 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={report?.expenseByCategory || []} dataKey='amount' nameKey='category' outerRadius={86} label>
-                  {(report?.expenseByCategory || []).map((_: any, i: number) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'center' }}>
+            <div style={{ width: '100%', height: 230 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={report?.expenseByCategory || []} dataKey='amount' nameKey='category' outerRadius={82}>
+                    {(report?.expenseByCategory || []).map((_: any, i: number) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => won(Number(v))} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ maxHeight: 220, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start' }}>
+              {(report?.expenseByCategory || []).map((c: any, i: number) => (
+                <span key={i} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  border: '1px solid #e2e8f0', borderRadius: 999, padding: '4px 10px',
+                  fontSize: 12, background: '#fff'
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: COLORS[i % COLORS.length], display: 'inline-block' }} />
+                  {c.category} · {won(c.amount)}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -167,7 +180,7 @@ export default function Page() {
             {(balances || []).slice(0, 12).map((b, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', padding: '7px 0' }}>
                 <span style={{ color: '#334155' }}>{b.paymentMethod}</span>
-                <b>{Number(b.balance).toLocaleString()}</b>
+                <b>{won(b.balance)}</b>
               </div>
             ))}
           </div>
