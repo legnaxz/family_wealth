@@ -373,34 +373,35 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
         in_financial_section = False
         for row in ws0.iter_rows(min_row=1, values_only=True):
             vals = list(row)
-            line0 = str(vals[0]).strip() if len(vals) > 0 and vals[0] is not None else ""
+            line = " ".join(str(v) for v in vals if v is not None)
 
-            if "3.재무현황" in line0:
+            if "3.재무현황" in line:
                 in_financial_section = True
                 continue
-            if "4.보험현황" in line0:
+            if "4.보험현황" in line and in_financial_section:
                 in_financial_section = False
                 break
             if not in_financial_section:
                 continue
 
-            if len(vals) < 8:
+            # 실제 열 구조: B(자산항목) C(자산명) E(자산금액), F(부채항목) G(부채명) I(부채금액)
+            if len(vals) < 9:
                 continue
 
-            asset_type = str(vals[0]).strip() if vals[0] is not None else ""
-            asset_name = str(vals[1]).strip() if vals[1] is not None else ""
-            liab_type = str(vals[4]).strip() if vals[4] is not None else ""
-            liab_name = str(vals[5]).strip() if vals[5] is not None else ""
-            asset_amount = _num(vals[3])
-            liab_amount = _num(vals[7])
+            asset_type = str(vals[1]).strip() if vals[1] is not None else ""
+            asset_name = str(vals[2]).strip() if vals[2] is not None else ""
+            liab_type = str(vals[5]).strip() if vals[5] is not None else ""
+            liab_name = str(vals[6]).strip() if vals[6] is not None else ""
+            asset_amount = _num(vals[4])
+            liab_amount = _num(vals[8])
 
-            # 헤더/합계/빈행 제외
-            if asset_type in {"", "자산"} and liab_type in {"", "부채"}:
-                continue
-            if asset_name in {"", "총자산"}:
+            # 헤더/합계/안내행 제외
+            if asset_name in {"", "상품명", "총자산"}:
                 asset_amount = 0
-            if liab_name in {"", "총부채"}:
+            if liab_name in {"", "상품명", "총부채"}:
                 liab_amount = 0
+            if "데이터를 내보낸" in asset_type:
+                continue
 
             if asset_name and asset_amount != 0:
                 a = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == asset_name))

@@ -32,14 +32,16 @@ export default function Page() {
   const [expenseShare, setExpenseShare] = useState<any[]>([])
   const [incomeShare, setIncomeShare] = useState<any[]>([])
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
+  const [selectedMonth, setSelectedMonth] = useState<string>('')
 
   const latestNetWorth = useMemo(() => rows?.[rows.length - 1]?.netWorth ?? 0, [rows])
+  const monthOptions = useMemo(() => (monthly || []).map((m: any) => m.month), [monthly])
 
   async function bootstrap() { await fetch(`${API}/local/bootstrap`, { method: 'POST' }) }
 
   async function recompute() {
     await fetch(`${API}/snapshots/recompute?household_id=${householdId}`, { method: 'POST' })
-    await Promise.all([refresh(), loadMonthly(), loadFlow(), loadCategoryShare(), loadBalanceSheet()])
+    await Promise.all([refresh(), loadFlow(), loadBalanceSheet(), loadMonthly()])
   }
 
   async function refresh() {
@@ -62,8 +64,14 @@ export default function Page() {
     setBs(await r.json())
   }
 
-  async function loadCategoryShare() {
-    const now = new Date(); const y = now.getFullYear(); const m = now.getMonth() + 1
+  async function loadCategoryShare(monthKey?: string) {
+    let y: number, m: number
+    if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
+      y = Number(monthKey.slice(0, 4)); m = Number(monthKey.slice(5, 7))
+    } else {
+      const now = new Date(); y = now.getFullYear(); m = now.getMonth() + 1
+    }
+
     const e = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=지출`)
     const i = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=수입`)
     const ej = await e.json(); const ij = await i.json()
@@ -80,6 +88,13 @@ export default function Page() {
   }
 
   useEffect(() => { bootstrap().then(recompute).catch(console.error) }, [])
+
+  useEffect(() => {
+    if (!monthOptions.length) return
+    const current = selectedMonth || monthOptions[monthOptions.length - 1]
+    if (!selectedMonth) setSelectedMonth(current)
+    loadCategoryShare(current).catch(console.error)
+  }, [monthOptions, selectedMonth])
 
   return (
     <main style={{ padding: 16, background: '#f8fafc', fontFamily: 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter, sans-serif' }}>
@@ -183,23 +198,28 @@ export default function Page() {
         </div>
 
         <div style={card}>
-          <h3 style={{ margin: '0 0 8px' }}>지출/수입 카테고리 비중 (당월)</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>수입/지출 카테고리 비중</h3>
+            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '4px 8px' }}>
+              {monthOptions.map((m: string) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <div style={{ fontSize: 12, color: THEME.expense, marginBottom: 6 }}>지출</div>
-              {expenseShare.slice(0, 8).map((c: any, i: number) => (
-                <div key={i} style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>{c.category}</span><b>{c.weight}%</b></div>
-                  <div style={{ height: 7, background: THEME.expenseSoft, borderRadius: 999 }}><div style={{ width: `${c.weight}%`, height: 7, background: THEME.expense, borderRadius: 999 }} /></div>
-                </div>
-              ))}
-            </div>
             <div>
               <div style={{ fontSize: 12, color: THEME.income, marginBottom: 6 }}>수입</div>
               {incomeShare.slice(0, 8).map((c: any, i: number) => (
                 <div key={i} style={{ marginBottom: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>{c.category}</span><b>{c.weight}%</b></div>
                   <div style={{ height: 7, background: THEME.incomeSoft, borderRadius: 999 }}><div style={{ width: `${c.weight}%`, height: 7, background: THEME.income, borderRadius: 999 }} /></div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: THEME.expense, marginBottom: 6 }}>지출</div>
+              {expenseShare.slice(0, 8).map((c: any, i: number) => (
+                <div key={i} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span>{c.category}</span><b>{c.weight}%</b></div>
+                  <div style={{ height: 7, background: THEME.expenseSoft, borderRadius: 999 }}><div style={{ width: `${c.weight}%`, height: 7, background: THEME.expense, borderRadius: 999 }} /></div>
                 </div>
               ))}
             </div>
