@@ -1,5 +1,6 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import hashlib
+import secrets
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -17,6 +18,7 @@ from .models import (
     Liability,
     Valuation,
     Transaction,
+    InvitationToken,
     NetWorthSnapshot,
     AuditLog,
 )
@@ -150,6 +152,56 @@ def add_household_member(household_id: int, email: str, role: str, user: User = 
     audit(db, household_id, user.id, "upsert", "household_member", f"{target.id}:{role}")
     db.commit()
     return {"ok": True}
+
+
+@app.post("/households/{household_id}/invite-tokens")
+def create_invite_token(
+    household_id: int,
+    role: str = "member",
+    expires_hours: int = 72,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_household_role(db, household_id, user.id, "admin")
+    if role not in ROLE_RANK:
+        raise HTTPException(400, "invalid role")
+    if role == "owner":
+        raise HTTPException(400, "owner invite not allowed")
+    token = secrets.token_urlsafe(24)
+    row = InvitationToken(
+        token=token,
+        household_id=household_id,
+        role=role,
+        created_by_user_id=user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=expires_hours),
+    )
+    db.add(row)
+    audit(db, household_id, user.id, "create", "invitation_token", token, detail=f"role={role}")
+    db.commit()
+    return {"token": token, "role": role, "expiresHours": expires_hours}
+
+
+@app.post("/households/join")
+def join_household(token: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    inv = db.get(InvitationToken, token)
+    if not inv:
+        raise HTTPException(404, "invalid invite token")
+    if inv.used:
+        raise HTTPException(400, "invite already used")
+    if inv.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        raise HTTPException(400, "invite expired")
+
+    existing = db.scalar(select(HouseholdMember).where(HouseholdMember.household_id == inv.household_id, HouseholdMember.user_id == user.id))
+    if existing:
+        existing.role = inv.role
+    else:
+        db.add(HouseholdMember(household_id=inv.household_id, user_id=user.id, role=inv.role))
+
+    inv.used = True
+    inv.used_by_user_id = user.id
+    audit(db, inv.household_id, user.id, "join", "invitation_token", token, detail=f"role={inv.role}")
+    db.commit()
+    return {"ok": True, "household_id": inv.household_id, "role": inv.role}
 
 
 @app.post("/accounts")
@@ -328,6 +380,77 @@ def recompute_snapshots(household_id: int, user: User = Depends(get_current_user
     audit(db, household_id, user.id, "recompute", "net_worth_snapshots", str(count))
     db.commit()
     return {"snapshots": count}
+
+
+@app.get("/households/{household_id}/reports/monthly")
+def monthly_report(
+    household_id: int,
+    year: int,
+    month: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_household_role(db, household_id, user.id, "viewer")
+    prefix = f"{year:04d}-{month:02d}-"
+
+    income = db.scalar(
+        select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+            Transaction.household_id == household_id,
+            Transaction.tx_type == "수입",
+            func.to_char(Transaction.tx_date, "YYYY-MM-DD").like(f"{prefix}%"),
+        )
+    )
+    expense = db.scalar(
+        select(func.coalesce(func.sum(func.abs(Transaction.amount)), 0)).where(
+            Transaction.household_id == household_id,
+            Transaction.tx_type == "지출",
+            func.to_char(Transaction.tx_date, "YYYY-MM-DD").like(f"{prefix}%"),
+        )
+    )
+
+    by_category_rows = db.execute(
+        select(Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
+        .where(
+            Transaction.household_id == household_id,
+            Transaction.tx_type == "지출",
+            func.to_char(Transaction.tx_date, "YYYY-MM-DD").like(f"{prefix}%"),
+        )
+        .group_by(Transaction.category)
+        .order_by(func.sum(Transaction.amount).asc())
+    ).all()
+
+    by_category = [
+        {"category": r[0] or "미분류", "amount": abs(float(r[1]))}
+        for r in by_category_rows
+    ]
+
+    return {
+        "year": year,
+        "month": month,
+        "income": float(income),
+        "expense": float(expense),
+        "cashflow": float(income) - float(expense),
+        "expenseByCategory": by_category,
+    }
+
+
+@app.get("/households/{household_id}/balances/by-payment-method")
+def balances_by_payment_method(
+    household_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_household_role(db, household_id, user.id, "viewer")
+    rows = db.execute(
+        select(Transaction.payment_method, func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.household_id == household_id)
+        .group_by(Transaction.payment_method)
+        .order_by(func.sum(Transaction.amount).desc())
+    ).all()
+    return [
+        {"paymentMethod": r[0] or "(미지정)", "balance": float(r[1])}
+        for r in rows
+    ]
 
 
 @app.get("/households/{household_id}/net-worth")

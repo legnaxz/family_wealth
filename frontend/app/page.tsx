@@ -11,6 +11,8 @@ export default function Page() {
   const [token, setToken] = useState('')
   const [householdId, setHouseholdId] = useState(1)
   const [rows, setRows] = useState<any[]>([])
+  const [report, setReport] = useState<any>(null)
+  const [balances, setBalances] = useState<any[]>([])
 
   async function authed(path: string, init: RequestInit = {}) {
     const headers: Record<string, string> = {
@@ -49,6 +51,22 @@ export default function Page() {
     setRows(Array.isArray(json) ? json : [])
   }
 
+  async function loadMonthlyReport() {
+    if (!token) return
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = now.getMonth() + 1
+    const res = await authed(`/households/${householdId}/reports/monthly?year=${y}&month=${m}`)
+    setReport(await res.json())
+  }
+
+  async function loadBalances() {
+    if (!token) return
+    const res = await authed(`/households/${householdId}/balances/by-payment-method`)
+    const json = await res.json()
+    setBalances(Array.isArray(json) ? json : [])
+  }
+
   async function createHousehold() {
     if (!token) return alert('먼저 로그인')
     const res = await authed('/households', {
@@ -84,7 +102,9 @@ export default function Page() {
 
       <p>Household ID: <input type="number" value={householdId} onChange={(e) => setHouseholdId(Number(e.target.value))} /></p>
       <button onClick={createHousehold}>가족 생성</button>{' '}
-      <button onClick={refresh}>새로고침</button>
+      <button onClick={refresh}>순자산 새로고침</button>{' '}
+      <button onClick={loadMonthlyReport}>월간 리포트</button>{' '}
+      <button onClick={loadBalances}>결제수단 잔액</button>
 
       <div style={{ width: '100%', height: 360, marginTop: 20 }}>
         <ResponsiveContainer>
@@ -98,7 +118,14 @@ export default function Page() {
         </ResponsiveContainer>
       </div>
 
+      <h3>Net Worth Data</h3>
       <pre>{JSON.stringify(rows, null, 2)}</pre>
+
+      <h3>Monthly Report</h3>
+      <pre>{JSON.stringify(report, null, 2)}</pre>
+
+      <h3>Balances by Payment Method</h3>
+      <pre>{JSON.stringify(balances, null, 2)}</pre>
     </main>
   )
 }

@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import String, ForeignKey, DateTime, Date, Numeric, Text, UniqueConstraint
+from sqlalchemy import String, ForeignKey, DateTime, Date, Numeric, Text, UniqueConstraint, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 
@@ -79,6 +79,18 @@ class Transaction(Base):
     currency: Mapped[str] = mapped_column(String(10), default="KRW")
     amount: Mapped[float] = mapped_column(Numeric(18, 2))
     tx_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class InvitationToken(Base):
+    __tablename__ = "invitation_tokens"
+    token: Mapped[str] = mapped_column(String(128), primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id"), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="member")
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    used_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

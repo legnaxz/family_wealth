@@ -14,8 +14,11 @@ docker compose up --build
 - JWT auth (register/login + Bearer required on protected APIs)
 - Household RBAC (owner/admin/member/viewer)
 - Household member role upsert API
+- Invite token flow (create token / join household)
 - Household/account/asset/liability/valuation create APIs
 - Net worth snapshots recompute API
+- Monthly report API (income/expense/cashflow + expense category breakdown)
+- Payment-method balance aggregation API
 - Net worth chart web page
 - XLSX import
   - **Real format support**: `가계부 내역` sheet import to `transactions`
@@ -28,9 +31,12 @@ docker compose up --build
 1. `POST /auth/register` or `POST /auth/login`
 2. use `Authorization: Bearer <token>`
 3. `POST /households`
-4. create assets/liabilities/valuations or upload xlsx
-5. `POST /snapshots/recompute?household_id=<id>`
-6. `GET /households/{id}/net-worth`
+4. (선택) `POST /households/{id}/invite-tokens` → `POST /households/join?token=...`
+5. create assets/liabilities/valuations or upload xlsx
+6. `POST /snapshots/recompute?household_id=<id>`
+7. `GET /households/{id}/net-worth`
+8. `GET /households/{id}/reports/monthly?year=2026&month=3`
+9. `GET /households/{id}/balances/by-payment-method`
 
 ## XLSX import (actual provided file)
 
