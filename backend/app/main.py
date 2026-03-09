@@ -390,8 +390,11 @@ def create_valuation(payload: ValuationCreate, user: User = Depends(get_current_
 
 
 @app.post("/imports/xlsx")
-def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def import_xlsx(household_id: int = 1, owner_scope: str = "self", file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "member")
+    owner_scope = normalize_owner_scope(owner_scope)
+    if owner_scope == "all":
+        owner_scope = "self"
     wb = load_workbook(file.file, data_only=True)
 
     imported = 0
@@ -451,21 +454,21 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
                 continue
 
             if asset_name and asset_amount != 0:
-                a = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == asset_name))
+                a = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == asset_name, Asset.owner_scope == owner_scope))
                 if not a:
-                    a = Asset(household_id=household_id, name=asset_name, category="sheet1")
+                    a = Asset(household_id=household_id, owner_scope=owner_scope, name=asset_name, category="sheet1")
                     db.add(a)
                     db.flush()
-                db.add(Valuation(household_id=household_id, asset_id=a.id, as_of_date=as_of, amount=asset_amount))
+                db.add(Valuation(household_id=household_id, owner_scope=owner_scope, asset_id=a.id, as_of_date=as_of, amount=asset_amount))
                 imported_assets += 1
 
             if liab_name and liab_amount != 0:
-                l = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == liab_name))
+                l = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == liab_name, Liability.owner_scope == owner_scope))
                 if not l:
-                    l = Liability(household_id=household_id, name=liab_name)
+                    l = Liability(household_id=household_id, owner_scope=owner_scope, name=liab_name)
                     db.add(l)
                     db.flush()
-                db.add(Valuation(household_id=household_id, liability_id=l.id, as_of_date=as_of, amount=liab_amount))
+                db.add(Valuation(household_id=household_id, owner_scope=owner_scope, liability_id=l.id, as_of_date=as_of, amount=liab_amount))
                 imported_liabilities += 1
 
         # sheet1 결과는 먼저 커밋(이후 거래중복 등으로 롤백되지 않게)
@@ -492,7 +495,7 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
             if tx_hash in seen_hashes:
                 skipped_duplicates += 1
                 continue
-            exists = db.scalar(select(Transaction).where(Transaction.household_id == household_id, Transaction.tx_hash == tx_hash))
+            exists = db.scalar(select(Transaction).where(Transaction.household_id == household_id, Transaction.tx_hash == tx_hash, Transaction.owner_scope == owner_scope))
             if exists:
                 skipped_duplicates += 1
                 continue
@@ -501,6 +504,7 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
             db.add(
                 Transaction(
                     household_id=household_id,
+                    owner_scope=owner_scope,
                     tx_date=tx_date,
                     tx_type=tx_type,
                     category=category,
@@ -524,20 +528,20 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
             name = str(row[2]).strip()
             amount = float(row[3])
             if kind == "asset":
-                target = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == name))
+                target = db.scalar(select(Asset).where(Asset.household_id == household_id, Asset.name == name, Asset.owner_scope == owner_scope))
                 if not target:
-                    target = Asset(household_id=household_id, name=name, category="imported")
+                    target = Asset(household_id=household_id, owner_scope=owner_scope, name=name, category="imported")
                     db.add(target)
                     db.flush()
-                db.add(Valuation(household_id=household_id, asset_id=target.id, as_of_date=as_of_date, amount=amount))
+                db.add(Valuation(household_id=household_id, owner_scope=owner_scope, asset_id=target.id, as_of_date=as_of_date, amount=amount))
                 imported += 1
             elif kind == "liability":
-                target = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == name))
+                target = db.scalar(select(Liability).where(Liability.household_id == household_id, Liability.name == name, Liability.owner_scope == owner_scope))
                 if not target:
-                    target = Liability(household_id=household_id, name=name)
+                    target = Liability(household_id=household_id, owner_scope=owner_scope, name=name)
                     db.add(target)
                     db.flush()
-                db.add(Valuation(household_id=household_id, liability_id=target.id, as_of_date=as_of_date, amount=amount))
+                db.add(Valuation(household_id=household_id, owner_scope=owner_scope, liability_id=target.id, as_of_date=as_of_date, amount=amount))
                 imported += 1
 
     audit(
@@ -547,10 +551,11 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
         "import",
         "xlsx",
         file.filename or "upload",
-        detail=f"transactions={imported}, skipped_duplicates={skipped_duplicates}, assets={imported_assets}, liabilities={imported_liabilities}",
+        detail=f"owner_scope={owner_scope}, transactions={imported}, skipped_duplicates={skipped_duplicates}, assets={imported_assets}, liabilities={imported_liabilities}",
     )
     db.commit()
     return {
+        "owner_scope": owner_scope,
         "imported": imported,
         "skipped_duplicates": skipped_duplicates,
         "imported_assets": imported_assets,
@@ -559,9 +564,9 @@ def import_xlsx(household_id: int = 1, file: UploadFile = File(...), user: User 
 
 
 @app.post("/imports/xlsx-local")
-def import_xlsx_local(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def import_xlsx_local(file: UploadFile = File(...), owner_scope: str = "self", db: Session = Depends(get_db)):
     demo, household = ensure_local_household(db)
-    return import_xlsx(household_id=household.id, file=file, user=demo, db=db)
+    return import_xlsx(household_id=household.id, owner_scope=owner_scope, file=file, user=demo, db=db)
 
 
 @app.post("/snapshots/recompute")
