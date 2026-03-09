@@ -1,4 +1,13 @@
-export const API = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+export const API = (() => {
+  const envBase = process.env.NEXT_PUBLIC_API_BASE
+  if (envBase) return envBase
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location
+    const proto = hostname.endsWith('.ts.net') ? 'https:' : window.location.protocol
+    return `${proto}//${hostname}:8000`
+  }
+  return 'http://localhost:8000'
+})()
 
 export const owners = [
   { value: 'all', label: '전체' },
