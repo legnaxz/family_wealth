@@ -45,6 +45,7 @@ class Asset(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     household_id: Mapped[int] = mapped_column(ForeignKey("households.id"), index=True)
     account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"), nullable=True)
+    owner_scope: Mapped[str] = mapped_column(String(20), default="shared", index=True)
     name: Mapped[str] = mapped_column(String(120))
     category: Mapped[str] = mapped_column(String(60), default="other")
 
@@ -53,6 +54,7 @@ class Liability(Base):
     __tablename__ = "liabilities"
     id: Mapped[int] = mapped_column(primary_key=True)
     household_id: Mapped[int] = mapped_column(ForeignKey("households.id"), index=True)
+    owner_scope: Mapped[str] = mapped_column(String(20), default="shared", index=True)
     name: Mapped[str] = mapped_column(String(120))
     lender: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
@@ -61,6 +63,7 @@ class Valuation(Base):
     __tablename__ = "valuations"
     id: Mapped[int] = mapped_column(primary_key=True)
     household_id: Mapped[int] = mapped_column(ForeignKey("households.id"), index=True)
+    owner_scope: Mapped[str] = mapped_column(String(20), default="shared", index=True)
     asset_id: Mapped[int | None] = mapped_column(ForeignKey("assets.id"), nullable=True)
     liability_id: Mapped[int | None] = mapped_column(ForeignKey("liabilities.id"), nullable=True)
     as_of_date: Mapped[date] = mapped_column(Date, index=True)
@@ -72,6 +75,7 @@ class Transaction(Base):
     __table_args__ = (UniqueConstraint("household_id", "tx_hash", name="uq_household_tx_hash"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     household_id: Mapped[int] = mapped_column(ForeignKey("households.id"), index=True)
+    owner_scope: Mapped[str] = mapped_column(String(20), default="self", index=True)
     tx_date: Mapped[date] = mapped_column(Date, index=True)
     tx_type: Mapped[str] = mapped_column(String(40))  # 수입/지출/이체
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)

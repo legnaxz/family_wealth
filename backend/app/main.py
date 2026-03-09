@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
 from openpyxl import load_workbook
 
@@ -48,6 +48,52 @@ app.add_middleware(
 )
 
 ROLE_RANK = {"viewer": 1, "member": 2, "admin": 3, "owner": 4}
+OWNER_SCOPES = {"all", "self", "spouse", "shared"}
+
+
+def ensure_local_schema_updates(db: Session) -> None:
+    statements = [
+        "ALTER TABLE transactions ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'self'",
+        "ALTER TABLE assets ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'shared'",
+        "ALTER TABLE liabilities ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'shared'",
+        "ALTER TABLE valuations ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'shared'",
+        "CREATE INDEX IF NOT EXISTS ix_transactions_owner_scope ON transactions(owner_scope)",
+        "CREATE INDEX IF NOT EXISTS ix_assets_owner_scope ON assets(owner_scope)",
+        "CREATE INDEX IF NOT EXISTS ix_liabilities_owner_scope ON liabilities(owner_scope)",
+        "CREATE INDEX IF NOT EXISTS ix_valuations_owner_scope ON valuations(owner_scope)",
+    ]
+    for stmt in statements:
+        try:
+            db.execute(text(stmt))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
+def normalize_owner_scope(owner_scope: str | None) -> str:
+    value = (owner_scope or "all").strip().lower()
+    return value if value in OWNER_SCOPES else "all"
+
+
+def owner_scopes_for_view(owner_scope: str | None) -> list[str]:
+    value = normalize_owner_scope(owner_scope)
+    if value == "all":
+        return ["self", "spouse", "shared"]
+    if value == "self":
+        return ["self"]
+    if value == "spouse":
+        return ["spouse"]
+    return ["shared"]
+
+
+def apply_transaction_owner_filter(stmt, owner_scope: str | None):
+    scopes = owner_scopes_for_view(owner_scope)
+    return stmt.where(Transaction.owner_scope.in_(scopes))
+
+
+def apply_valuation_owner_filter(stmt, owner_scope: str | None):
+    scopes = owner_scopes_for_view(owner_scope)
+    return stmt.where(Valuation.owner_scope.in_(scopes))
 
 
 def ensure_local_household(db: Session) -> tuple[User, Household]:
@@ -57,6 +103,7 @@ def ensure_local_household(db: Session) -> tuple[User, Household]:
         Base.metadata.create_all(bind=engine)
     except Exception:
         pass
+    ensure_local_schema_updates(db)
 
     demo = db.scalar(select(User).where(User.email == "demo@local"))
     if not demo:
@@ -591,28 +638,24 @@ def monthly_report(
     household_id: int,
     year: int,
     month: int,
+    owner_scope: str = "all",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     require_household_role(db, household_id, user.id, "viewer")
     ym = f"{year:04d}-{month:02d}"
 
-    income = db.scalar(
-        select(func.coalesce(func.sum(Transaction.amount), 0)).where(
-            Transaction.household_id == household_id,
-            Transaction.tx_type == "수입",
-            func.strftime("%Y-%m", Transaction.tx_date) == ym,
-        )
+    income_stmt = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+        Transaction.household_id == household_id,
+        Transaction.tx_type == "수입",
+        func.strftime("%Y-%m", Transaction.tx_date) == ym,
     )
-    expense = db.scalar(
-        select(func.coalesce(func.sum(func.abs(Transaction.amount)), 0)).where(
-            Transaction.household_id == household_id,
-            Transaction.tx_type == "지출",
-            func.strftime("%Y-%m", Transaction.tx_date) == ym,
-        )
+    expense_stmt = select(func.coalesce(func.sum(func.abs(Transaction.amount)), 0)).where(
+        Transaction.household_id == household_id,
+        Transaction.tx_type == "지출",
+        func.strftime("%Y-%m", Transaction.tx_date) == ym,
     )
-
-    by_category_rows = db.execute(
+    by_category_stmt = (
         select(Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
         .where(
             Transaction.household_id == household_id,
@@ -621,7 +664,11 @@ def monthly_report(
         )
         .group_by(Transaction.category)
         .order_by(func.sum(Transaction.amount).asc())
-    ).all()
+    )
+
+    income = db.scalar(apply_transaction_owner_filter(income_stmt, owner_scope))
+    expense = db.scalar(apply_transaction_owner_filter(expense_stmt, owner_scope))
+    by_category_rows = db.execute(apply_transaction_owner_filter(by_category_stmt, owner_scope)).all()
 
     by_category = [
         {"category": r[0] or "미분류", "amount": abs(float(r[1]))}
@@ -644,13 +691,14 @@ def category_share(
     year: int,
     month: int,
     tx_type: str = "지출",
+    owner_scope: str = "all",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     require_household_role(db, household_id, user.id, "viewer")
     ym = f"{year:04d}-{month:02d}"
 
-    rows = db.execute(
+    stmt = (
         select(Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
         .where(
             Transaction.household_id == household_id,
@@ -658,7 +706,8 @@ def category_share(
             func.strftime("%Y-%m", Transaction.tx_date) == ym,
         )
         .group_by(Transaction.category)
-    ).all()
+    )
+    rows = db.execute(apply_transaction_owner_filter(stmt, owner_scope)).all()
 
     parsed = []
     for c, amt in rows:
@@ -682,13 +731,14 @@ def daily_cashflow(
     household_id: int,
     year: int,
     month: int,
+    owner_scope: str = "all",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     require_household_role(db, household_id, user.id, "viewer")
     ym = f"{year:04d}-{month:02d}"
 
-    rows = db.execute(
+    stmt = (
         select(Transaction.tx_date, Transaction.tx_type, func.coalesce(func.sum(Transaction.amount), 0))
         .where(
             Transaction.household_id == household_id,
@@ -696,7 +746,8 @@ def daily_cashflow(
         )
         .group_by(Transaction.tx_date, Transaction.tx_type)
         .order_by(Transaction.tx_date.asc())
-    ).all()
+    )
+    rows = db.execute(apply_transaction_owner_filter(stmt, owner_scope)).all()
 
     by_day: dict[str, dict[str, float]] = defaultdict(lambda: {"income": 0.0, "expense": 0.0, "transfer": 0.0, "net": 0.0})
     for d, tx_type, amt in rows:
@@ -718,17 +769,19 @@ def daily_cashflow(
 def daily_report(
     household_id: int,
     day: str,
+    owner_scope: str = "all",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     require_household_role(db, household_id, user.id, "viewer")
     target = norm_date(day)
 
-    rows = db.execute(
+    rows_stmt = (
         select(Transaction.tx_type, Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
         .where(Transaction.household_id == household_id, Transaction.tx_date == target)
         .group_by(Transaction.tx_type, Transaction.category)
-    ).all()
+    )
+    rows = db.execute(apply_transaction_owner_filter(rows_stmt, owner_scope)).all()
 
     income = 0.0
     expense = 0.0
@@ -741,12 +794,13 @@ def daily_report(
             expense += abs(v)
         by_cat.append({"type": tx_type, "category": cat or "미분류", "amount": abs(v)})
 
-    txs = db.execute(
-        select(Transaction.tx_type, Transaction.category, Transaction.content, Transaction.amount, Transaction.payment_method)
+    txs_stmt = (
+        select(Transaction.tx_type, Transaction.category, Transaction.content, Transaction.amount, Transaction.payment_method, Transaction.owner_scope)
         .where(Transaction.household_id == household_id, Transaction.tx_date == target)
         .order_by(func.abs(Transaction.amount).desc())
         .limit(30)
-    ).all()
+    )
+    txs = db.execute(apply_transaction_owner_filter(txs_stmt, owner_scope)).all()
 
     tx_list = [
         {
@@ -755,6 +809,7 @@ def daily_report(
             "content": t[2] or "",
             "amount": float(t[3]),
             "paymentMethod": t[4] or "",
+            "ownerScope": t[5] or "self",
         }
         for t in txs
     ]
@@ -770,9 +825,9 @@ def daily_report(
 
 
 @app.get("/households/{household_id}/cashflow/monthly")
-def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def monthly_cashflow(household_id: int, owner_scope: str = "all", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
-    rows = db.execute(
+    stmt = (
         select(
             func.strftime("%Y-%m", Transaction.tx_date).label("ym"),
             Transaction.tx_type,
@@ -781,7 +836,8 @@ def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), 
         .where(Transaction.household_id == household_id)
         .group_by(func.strftime("%Y-%m", Transaction.tx_date), Transaction.tx_type)
         .order_by(func.strftime("%Y-%m", Transaction.tx_date).asc())
-    ).all()
+    )
+    rows = db.execute(apply_transaction_owner_filter(stmt, owner_scope)).all()
 
     agg: dict[str, dict[str, float]] = defaultdict(lambda: {"income": 0.0, "expense": 0.0, "transfer": 0.0})
     for ym, tx_type, amt in rows:
@@ -806,14 +862,15 @@ def monthly_cashflow(household_id: int, user: User = Depends(get_current_user), 
 
 
 @app.get("/households/{household_id}/flow")
-def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def flow_chart(household_id: int, owner_scope: str = "all", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
 
-    rows = db.execute(
+    stmt = (
         select(Transaction.tx_type, Transaction.category, func.coalesce(func.sum(Transaction.amount), 0))
         .where(Transaction.household_id == household_id)
         .group_by(Transaction.tx_type, Transaction.category)
-    ).all()
+    )
+    rows = db.execute(apply_transaction_owner_filter(stmt, owner_scope)).all()
 
     incomes: list[tuple[str, float]] = []
     expenses: list[tuple[str, float]] = []
@@ -888,28 +945,31 @@ def flow_chart(household_id: int, user: User = Depends(get_current_user), db: Se
 
 
 @app.get("/households/{household_id}/balance-sheet")
-def balance_sheet(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def balance_sheet(household_id: int, owner_scope: str = "all", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
 
-    latest_date = db.scalar(select(func.max(Valuation.as_of_date)).where(Valuation.household_id == household_id))
+    latest_date_stmt = select(func.max(Valuation.as_of_date)).where(Valuation.household_id == household_id)
+    latest_date = db.scalar(apply_valuation_owner_filter(latest_date_stmt, owner_scope))
     if not latest_date:
         return {"asOf": None, "assetsTotal": 0, "liabilitiesTotal": 0, "assets": [], "liabilities": []}
 
-    asset_rows = db.execute(
+    asset_stmt = (
         select(Asset.name, func.coalesce(func.sum(Valuation.amount), 0))
         .join(Asset, Asset.id == Valuation.asset_id)
         .where(Valuation.household_id == household_id, Valuation.as_of_date == latest_date)
         .group_by(Asset.name)
         .order_by(func.sum(Valuation.amount).desc())
-    ).all()
-
-    liability_rows = db.execute(
+    )
+    liability_stmt = (
         select(Liability.name, func.coalesce(func.sum(Valuation.amount), 0))
         .join(Liability, Liability.id == Valuation.liability_id)
         .where(Valuation.household_id == household_id, Valuation.as_of_date == latest_date)
         .group_by(Liability.name)
         .order_by(func.sum(Valuation.amount).desc())
-    ).all()
+    )
+
+    asset_rows = db.execute(apply_valuation_owner_filter(asset_stmt, owner_scope)).all()
+    liability_rows = db.execute(apply_valuation_owner_filter(liability_stmt, owner_scope)).all()
 
     assets_total = sum(float(v) for _, v in asset_rows)
     liabilities_total = sum(float(v) for _, v in liability_rows)
@@ -933,17 +993,42 @@ def balance_sheet(household_id: int, user: User = Depends(get_current_user), db:
 
 
 @app.get("/households/{household_id}/net-worth")
-def net_worth(household_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def net_worth(household_id: int, owner_scope: str = "all", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     require_household_role(db, household_id, user.id, "viewer")
-    rows = db.scalars(
-        select(NetWorthSnapshot).where(NetWorthSnapshot.household_id == household_id).order_by(NetWorthSnapshot.snapshot_date.asc())
-    ).all()
-    return [
-        {
-            "date": r.snapshot_date.isoformat(),
-            "assets": float(r.assets_total),
-            "liabilities": float(r.liabilities_total),
-            "netWorth": float(r.net_worth),
-        }
-        for r in rows
-    ]
+    if normalize_owner_scope(owner_scope) == "all":
+        rows = db.scalars(
+            select(NetWorthSnapshot).where(NetWorthSnapshot.household_id == household_id).order_by(NetWorthSnapshot.snapshot_date.asc())
+        ).all()
+        return [
+            {
+                "date": r.snapshot_date.isoformat(),
+                "assets": float(r.assets_total),
+                "liabilities": float(r.liabilities_total),
+                "netWorth": float(r.net_worth),
+            }
+            for r in rows
+        ]
+
+    valuation_dates_stmt = select(Valuation.as_of_date).where(Valuation.household_id == household_id).distinct().order_by(Valuation.as_of_date.asc())
+    valuation_dates = db.scalars(apply_valuation_owner_filter(valuation_dates_stmt, owner_scope)).all()
+    out = []
+    for d in valuation_dates:
+        assets_total_stmt = select(func.coalesce(func.sum(Valuation.amount), 0)).where(
+            Valuation.household_id == household_id,
+            Valuation.as_of_date == d,
+            Valuation.asset_id.is_not(None),
+        )
+        liabilities_total_stmt = select(func.coalesce(func.sum(Valuation.amount), 0)).where(
+            Valuation.household_id == household_id,
+            Valuation.as_of_date == d,
+            Valuation.liability_id.is_not(None),
+        )
+        assets_total = float(db.scalar(apply_valuation_owner_filter(assets_total_stmt, owner_scope)) or 0)
+        liabilities_total = float(db.scalar(apply_valuation_owner_filter(liabilities_total_stmt, owner_scope)) or 0)
+        out.append({
+            "date": norm_date(d).isoformat(),
+            "assets": assets_total,
+            "liabilities": liabilities_total,
+            "netWorth": assets_total - liabilities_total,
+        })
+    return out

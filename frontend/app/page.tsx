@@ -1,41 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
-
-const API = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
-const THEME = {
-  income: '#ef4444',
-  incomeSoft: '#fee2e2',
-  expense: '#3b82f6',
-  expenseSoft: '#dbeafe',
-}
-const won = (n: number) => `₩${Math.round(Number(n || 0)).toLocaleString('ko-KR')}`
-
-const card: React.CSSProperties = {
-  background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14,
-  boxShadow: '0 6px 18px rgba(15,23,42,0.08)', padding: 14,
-}
-
-const CAT_ICON: Record<string, string> = {
-  '급여': '💼', '식비': '🍚', '교통': '🚌', '금융': '🏦', '온라인쇼핑': '🛒', '생활': '🏠', '여행': '✈️', '여행/숙박': '✈️',
-  '교육': '📚', '교육/학습': '📚', '의료': '🏥', '의료/건강': '🏥', '주거/통신': '🏡', '카페/간식': '☕', '패션/쇼핑': '👕', '미분류': '📌'
-}
-
-function heatColor(net: number, maxAbs: number) {
-  if (maxAbs <= 0) return { bg: '#f8fafc', text: '#334155' }
-  const t = Math.min(1, Math.abs(net) / maxAbs)
-  if (net >= 0) {
-    const a = 0.12 + t * 0.55
-    return { bg: `rgba(239,68,68,${a})`, text: t > 0.55 ? '#fff' : '#7f1d1d' }
-  }
-  const a = 0.12 + t * 0.55
-  return { bg: `rgba(59,130,246,${a})`, text: t > 0.55 ? '#fff' : '#1e3a8a' }
-}
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { OwnerTabs } from '../components/OwnerTabs'
+import { API, CAT_ICON, OwnerScope, THEME, card, heatColor, won } from '../lib/ui'
 
 export default function Page() {
   const householdId = 1
   const [activeTab, setActiveTab] = useState<'calendar' | 'insights'>('calendar')
+  const [ownerScope, setOwnerScope] = useState<OwnerScope>('all')
   const [rows, setRows] = useState<any[]>([])
   const [monthly, setMonthly] = useState<any[]>([])
   const [daily, setDaily] = useState<any[]>([])
@@ -47,6 +20,7 @@ export default function Page() {
   const [dayReport, setDayReport] = useState<any>(null)
 
   const latestNetWorth = useMemo(() => rows?.[rows.length - 1]?.netWorth ?? 0, [rows])
+  const latestMonth = useMemo(() => monthly?.[monthly.length - 1] || null, [monthly])
   const monthOptions = useMemo(() => (monthly || []).map((m: any) => m.month), [monthly])
   const dailyMap = useMemo(() => {
     const m: Record<string, any> = {}
@@ -65,6 +39,8 @@ export default function Page() {
     return [...a, ...b].sort((x, y) => Number(y.amount) - Number(x.amount))
   }, [incomeShare, expenseShare])
 
+  const recentTransactions = useMemo(() => (dayReport?.transactions || []).slice(0, 5), [dayReport])
+
   const calendarDays = useMemo(() => {
     if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) return [] as any[]
     const y = Number(selectedMonth.slice(0, 4))
@@ -82,18 +58,22 @@ export default function Page() {
 
   async function bootstrap() { await fetch(`${API}/local/bootstrap`, { method: 'POST' }) }
 
+  function qs() {
+    return new URLSearchParams({ owner_scope: ownerScope }).toString()
+  }
+
   async function recompute() {
     await fetch(`${API}/snapshots/recompute?household_id=${householdId}`, { method: 'POST' })
     await Promise.all([refresh(), loadBalanceSheet(), loadMonthly()])
   }
 
   async function refresh() {
-    const r = await fetch(`${API}/households/${householdId}/net-worth`)
+    const r = await fetch(`${API}/households/${householdId}/net-worth?${qs()}`)
     setRows(await r.json())
   }
 
   async function loadMonthly() {
-    const r = await fetch(`${API}/households/${householdId}/cashflow/monthly`)
+    const r = await fetch(`${API}/households/${householdId}/cashflow/monthly?${qs()}`)
     setMonthly(await r.json())
   }
 
@@ -101,17 +81,17 @@ export default function Page() {
     if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return
     const y = Number(monthKey.slice(0, 4))
     const m = Number(monthKey.slice(5, 7))
-    const r = await fetch(`${API}/households/${householdId}/cashflow/daily?year=${y}&month=${m}`)
+    const r = await fetch(`${API}/households/${householdId}/cashflow/daily?year=${y}&month=${m}&${qs()}`)
     setDaily(await r.json())
   }
 
   async function loadDailyReport(day: string) {
-    const r = await fetch(`${API}/households/${householdId}/cashflow/daily-report?day=${encodeURIComponent(day)}`)
+    const r = await fetch(`${API}/households/${householdId}/cashflow/daily-report?day=${encodeURIComponent(day)}&${qs()}`)
     setDayReport(await r.json())
   }
 
   async function loadBalanceSheet() {
-    const r = await fetch(`${API}/households/${householdId}/balance-sheet`)
+    const r = await fetch(`${API}/households/${householdId}/balance-sheet?${qs()}`)
     setBs(await r.json())
   }
 
@@ -123,8 +103,8 @@ export default function Page() {
       const now = new Date(); y = now.getFullYear(); m = now.getMonth() + 1
     }
 
-    const e = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=지출`)
-    const i = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=수입`)
+    const e = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=지출&${qs()}`)
+    const i = await fetch(`${API}/households/${householdId}/category-share?year=${y}&month=${m}&tx_type=수입&${qs()}`)
     const ej = await e.json(); const ij = await i.json()
     setExpenseShare(ej?.items || []); setIncomeShare(ij?.items || [])
   }
@@ -139,13 +119,14 @@ export default function Page() {
   }
 
   useEffect(() => { bootstrap().then(recompute).catch(console.error) }, [])
+  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly()]).catch(console.error) }, [ownerScope])
 
   useEffect(() => {
     if (!monthOptions.length) return
-    const current = selectedMonth || monthOptions[monthOptions.length - 1]
-    if (!selectedMonth) setSelectedMonth(current)
+    const current = selectedMonth && monthOptions.includes(selectedMonth) ? selectedMonth : monthOptions[monthOptions.length - 1]
+    if (selectedMonth !== current) setSelectedMonth(current)
     Promise.all([loadCategoryShare(current), loadDailyCashflow(current)]).catch(console.error)
-  }, [monthOptions, selectedMonth])
+  }, [monthOptions, selectedMonth, ownerScope])
 
   useEffect(() => {
     if (!selectedDate && calendarDays.length) {
@@ -156,20 +137,69 @@ export default function Page() {
 
   useEffect(() => {
     if (selectedDate) loadDailyReport(selectedDate).catch(console.error)
-  }, [selectedDate])
+  }, [selectedDate, ownerScope])
 
   return (
-    <main style={{ padding: 16, background: '#f8fafc', fontFamily: 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter, sans-serif' }}>
+    <main style={{ padding: 16, background: THEME.pageBg, fontFamily: 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter, sans-serif' }}>
       <div style={{ ...card, marginBottom: 10, background: 'linear-gradient(90deg,#eff6ff,#f0fdf4)' }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>대시보드</h1>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button onClick={() => setActiveTab('calendar')}>현금흐름 달력</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22 }}>Family Wealth</h1>
+            <div style={{ color: THEME.textSoft, fontSize: 13, marginTop: 4 }}>모바일은 요약 중심, 웹은 전체 기록 중심으로 정리 중</div>
+          </div>
+          <OwnerTabs value={ownerScope} onChange={setOwnerScope} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+          <button onClick={() => setActiveTab('calendar')}>현금흐름</button>
           <button onClick={() => setActiveTab('insights')}>재무 인사이트</button>
           <button onClick={bootstrap}>로컬 초기화</button>
           <input type='file' accept='.xlsx' onChange={uploadXlsx} />
           <button onClick={recompute}>전체 재계산</button>
         </div>
       </div>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
+        <div style={card}><div style={{ color: THEME.textSoft, fontSize: 12 }}>이번 달 순현금흐름</div><div style={{ fontSize: 24, fontWeight: 800 }}>{won(latestMonth?.cashflow || 0)}</div></div>
+        <div style={card}><div style={{ color: THEME.textSoft, fontSize: 12 }}>이번 달 지출</div><div style={{ fontSize: 24, fontWeight: 800, color: THEME.expense }}>{won(latestMonth?.expense || 0)}</div></div>
+        <div style={card}><div style={{ color: THEME.textSoft, fontSize: 12 }}>이번 달 수입</div><div style={{ fontSize: 24, fontWeight: 800, color: THEME.income }}>{won(latestMonth?.income || 0)}</div></div>
+        <div style={card}><div style={{ color: THEME.textSoft, fontSize: 12 }}>순자산</div><div style={{ fontSize: 24, fontWeight: 800 }}>{won(latestNetWorth)}</div></div>
+      </section>
+
+      <section style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10, marginBottom: 10 }}>
+        <div style={card}>
+          <h3 style={{ margin: '0 0 8px' }}>최근 기록</h3>
+          <div style={{ maxHeight: 240, overflow: 'auto' }}>
+            {recentTransactions.length ? recentTransactions.map((t: any, i: number) => {
+              const isIncome = t.type === '수입'
+              return (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', padding: '8px 0', gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{t.content || t.category}</div>
+                    <div style={{ fontSize: 12, color: THEME.textSoft }}>{CAT_ICON[t.category] || '📌'} {t.category} · {t.ownerScope}</div>
+                  </div>
+                  <div style={{ fontWeight: 800, color: isIncome ? THEME.income : THEME.expense }}>{isIncome ? '+' : '-'}{won(Math.abs(t.amount || 0))}</div>
+                </div>
+              )
+            }) : <div style={{ color: THEME.textSoft, fontSize: 13 }}>선택한 날짜의 거래가 아직 없어요.</div>}
+          </div>
+        </div>
+
+        <div style={card}>
+          <h3 style={{ margin: '0 0 8px' }}>오늘/선택일 요약</h3>
+          <div style={{ fontSize: 12, color: THEME.textSoft, marginBottom: 8 }}>{dayReport?.date || selectedDate || '-'}</div>
+          <div style={{ fontSize: 13, marginBottom: 4, color: THEME.income }}>수입 {won(dayReport?.income || 0)}</div>
+          <div style={{ fontSize: 13, marginBottom: 4, color: THEME.expense }}>지출 {won(dayReport?.expense || 0)}</div>
+          <div style={{ fontSize: 13, marginBottom: 8 }}>순흐름 {won(dayReport?.net || 0)}</div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {(dayReport?.categories || []).slice(0, 5).map((c: any, i: number) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <span>{CAT_ICON[c.category] || '📌'} {c.category}</span>
+                <b>{won(c.amount)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {activeTab === 'calendar' ? (
         <section style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
@@ -181,24 +211,16 @@ export default function Page() {
               </select>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-              {['일', '월', '화', '수', '목', '금', '토'].map((d) => (
-                <div key={d} style={{ fontSize: 11, color: '#64748b', textAlign: 'center' }}>{d}</div>
-              ))}
+              {['일', '월', '화', '수', '목', '금', '토'].map((d) => <div key={d} style={{ fontSize: 11, color: THEME.textSoft, textAlign: 'center' }}>{d}</div>)}
               {calendarDays.map((d: any) => {
                 if (d.empty) return <div key={d.key} />
                 const hc = heatColor(Number(d.net || 0), maxAbsDailyNet)
                 return (
-                  <button
-                    key={d.iso}
-                    onClick={() => setSelectedDate(d.iso)}
-                    style={{
-                      border: selectedDate === d.iso ? '2px solid #0f172a' : '1px solid #e5e7eb',
-                      borderRadius: 10, padding: 6, minHeight: 68, background: hc.bg, textAlign: 'left', cursor: 'pointer'
-                    }}
-                  >
+                  <button key={d.iso} onClick={() => setSelectedDate(d.iso)} style={{ border: selectedDate === d.iso ? '2px solid #0f172a' : '1px solid #e5e7eb', borderRadius: 10, padding: 6, minHeight: 68, background: hc.bg, textAlign: 'left', cursor: 'pointer' }}>
                     <div style={{ fontSize: 11, color: hc.text, marginBottom: 4, fontWeight: 700 }}>{d.day}</div>
-                    {d.income > 0 && <div style={{ fontSize: 10, color: hc.text, backdropFilter: 'blur(2px)' }}>+{won(d.income)}</div>}
-                    {d.expense > 0 && <div style={{ fontSize: 10, color: hc.text, backdropFilter: 'blur(2px)' }}>-{won(d.expense)}</div>}
+                    {d.net !== 0 && <div style={{ fontSize: 10, color: hc.text }}>{won(d.net)}</div>}
+                    {d.income > 0 && <div style={{ fontSize: 10, color: hc.text }}>+{won(d.income)}</div>}
+                    {d.expense > 0 && <div style={{ fontSize: 10, color: hc.text }}>-{won(d.expense)}</div>}
                   </button>
                 )
               })}
@@ -206,29 +228,9 @@ export default function Page() {
           </div>
 
           <div style={card}>
-            <h3 style={{ margin: '0 0 8px' }}>일일 리포트</h3>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{dayReport?.date || selectedDate || '-'}</div>
-            <div style={{ fontSize: 13, marginBottom: 4, color: THEME.income }}>수입 {won(dayReport?.income || 0)}</div>
-            <div style={{ fontSize: 13, marginBottom: 4, color: THEME.expense }}>지출 {won(dayReport?.expense || 0)}</div>
-            <div style={{ fontSize: 13, marginBottom: 8 }}>순흐름 {won(dayReport?.net || 0)}</div>
-
-            <div style={{ maxHeight: 320, overflow: 'auto' }}>
-              {(dayReport?.categories || []).slice(0, 12).map((c: any, i: number) => {
-                const isIncome = c.type === '수입'
-                return (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span>{CAT_ICON[c.category] || '📌'} {c.category}</span>
-                    <b style={{ color: isIncome ? THEME.income : THEME.expense }}>{isIncome ? '+' : '-'}{won(c.amount)}</b>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div style={{ ...card, gridColumn: '1 / span 2' }}>
-            <h3 style={{ margin: '0 0 8px' }}>월 카테고리 통합 (수입+지출)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(280px, 1fr))', gap: 8 }}>
-              {mergedCategories.slice(0, 16).map((c: any, i: number) => {
+            <h3 style={{ margin: '0 0 8px' }}>월 카테고리</h3>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {mergedCategories.slice(0, 10).map((c: any, i: number) => {
                 const isIncome = c.type === '수입'
                 const color = isIncome ? THEME.income : THEME.expense
                 const bg = isIncome ? THEME.incomeSoft : THEME.expenseSoft
@@ -250,8 +252,7 @@ export default function Page() {
       ) : (
         <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={card}>
-            <h3 style={{ margin: '0 0 8px' }}>순자산</h3>
-            <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 8 }}>{won(latestNetWorth)}</div>
+            <h3 style={{ margin: '0 0 8px' }}>순자산 추이</h3>
             <div style={{ width: '100%', height: 220 }}>
               <ResponsiveContainer>
                 <LineChart data={rows}>
@@ -267,20 +268,10 @@ export default function Page() {
 
           <div style={card}>
             <h3 style={{ margin: '0 0 8px' }}>자산/부채 현황</h3>
-            <div style={{ marginBottom: 8, color: '#7f1d1d' }}>자산 총액 <b>{won(bs.assetsTotal || 0)}</b></div>
-            {(bs.assets || []).slice(0, 6).map((x: any, i: number) => (
-              <div key={i} style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>{x.name}</span><b>{x.weight}%</b></div>
-                <div style={{ height: 7, background: THEME.incomeSoft, borderRadius: 999 }}><div style={{ width: `${x.weight}%`, height: 7, background: THEME.income, borderRadius: 999 }} /></div>
-              </div>
-            ))}
-            <div style={{ margin: '8px 0', color: '#1e3a8a' }}>부채 총액 <b>{won(bs.liabilitiesTotal || 0)}</b></div>
-            {(bs.liabilities || []).slice(0, 6).map((x: any, i: number) => (
-              <div key={i} style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>{x.name}</span><b>{x.weight}%</b></div>
-                <div style={{ height: 7, background: THEME.expenseSoft, borderRadius: 999 }}><div style={{ width: `${x.weight}%`, height: 7, background: THEME.expense, borderRadius: 999 }} /></div>
-              </div>
-            ))}
+            <div style={{ marginBottom: 8 }}>자산 총액 <b>{won(bs.assetsTotal || 0)}</b></div>
+            {(bs.assets || []).slice(0, 5).map((x: any, i: number) => <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}><span>{x.name}</span><b>{x.weight}%</b></div>)}
+            <div style={{ margin: '12px 0 8px' }}>부채 총액 <b>{won(bs.liabilitiesTotal || 0)}</b></div>
+            {(bs.liabilities || []).slice(0, 5).map((x: any, i: number) => <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}><span>{x.name}</span><b>{x.weight}%</b></div>)}
           </div>
         </section>
       )}
