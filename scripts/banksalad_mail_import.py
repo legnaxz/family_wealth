@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -48,9 +47,20 @@ def log(msg: str) -> None:
 
 
 def run(cmd: list[str]) -> str:
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    p = subprocess.run(cmd, capture_output=True)
     if p.returncode != 0:
-        raise RuntimeError(f"command failed ({p.returncode}): {' '.join(cmd)}\nstdout={p.stdout}\nstderr={p.stderr}")
+        stdout = p.stdout.decode("utf-8", errors="replace")
+        stderr = p.stderr.decode("utf-8", errors="replace")
+        raise RuntimeError(f"command failed ({p.returncode}): {' '.join(cmd)}\nstdout={stdout}\nstderr={stderr}")
+    return p.stdout.decode("utf-8")
+
+
+def run_bytes(cmd: list[str]) -> bytes:
+    p = subprocess.run(cmd, capture_output=True)
+    if p.returncode != 0:
+        stdout = p.stdout.decode("utf-8", errors="replace")
+        stderr = p.stderr.decode("utf-8", errors="replace")
+        raise RuntimeError(f"command failed ({p.returncode}): {' '.join(cmd)}\nstdout={stdout}\nstderr={stderr}")
     return p.stdout
 
 
@@ -86,11 +96,67 @@ def get_message(message_id: str) -> dict[str, Any]:
 
 
 def get_attachment_data(message_id: str, attachment_id: str) -> bytes:
-    res = gws_json([
-        "gmail", "users", "messages", "attachments", "get",
+    raw = run_bytes([
+        "gws", "gmail", "users", "messages", "attachments", "get",
         "--params", json.dumps({"userId": "me", "messageId": message_id, "id": attachment_id}, ensure_ascii=False),
+        "--format", "json",
     ])
-    return decode_base64url(res["data"])
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # gws may return binary attachment bytes directly.
+        return raw
+    try:
+        res = json.loads(text)
+        if isinstance(res, dict) and "data" in res:
+            return decode_base64url(res["data"])
+    except Exception:
+        pass
+    # gws may return the attachment body directly as base64url text for this endpoint.
+    return decode_base64url(text.strip())
+
+
+def message_headers(message: dict[str, Any]) -> dict[str, str]:
+    headers = {}
+    for h in ((message.get("payload") or {}).get("headers") or []):
+        name = h.get("name")
+        value = h.get("value")
+        if name and value is not None:
+            headers[name.lower()] = value
+    return headers
+
+
+def attachment_inventory(message: dict[str, Any]) -> list[dict[str, Any]]:
+    out = []
+    for part in walk_parts(message.get("payload") or {}):
+        filename = part.get("filename") or ""
+        body = part.get("body") or {}
+        if not filename:
+            continue
+        out.append({
+            "filename": filename,
+            "mimeType": part.get("mimeType"),
+            "size": body.get("size"),
+            "attachmentId": body.get("attachmentId"),
+        })
+    return out
+
+
+def print_triage(messages: list[dict[str, Any]], processed_ids: set[str]) -> None:
+    rows = []
+    for item in messages:
+        msg = get_message(item["id"])
+        headers = message_headers(msg)
+        rows.append({
+            "id": msg.get("id"),
+            "processed": msg.get("id") in processed_ids,
+            "date": headers.get("date"),
+            "from": headers.get("from"),
+            "subject": headers.get("subject"),
+            "snippet": msg.get("snippet"),
+            "attachments": attachment_inventory(msg),
+        })
+    print(json.dumps(rows, ensure_ascii=False, indent=2))
 
 
 def sanitize_filename(name: str) -> str:
@@ -126,9 +192,11 @@ def save_attachments(message: dict[str, Any], out_dir: Path) -> list[Path]:
 
 def extract_zip(zip_path: Path, password: str, extract_dir: Path) -> None:
     cmd = ["unzip", "-P", password, "-o", str(zip_path), "-d", str(extract_dir)]
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    p = subprocess.run(cmd, capture_output=True)
     if p.returncode != 0:
-        raise RuntimeError(f"failed to unzip {zip_path.name}: {p.stderr or p.stdout}")
+        stderr = p.stderr.decode("utf-8", errors="replace")
+        stdout = p.stdout.decode("utf-8", errors="replace")
+        raise RuntimeError(f"failed to unzip {zip_path.name}: {stderr or stdout}")
 
 
 def collect_xlsx_files(paths: list[Path], password: str) -> list[Path]:
@@ -197,6 +265,8 @@ def main() -> int:
     parser.add_argument("--password", default=DEFAULT_PASSWORD)
     parser.add_argument("--api", default=DEFAULT_API)
     parser.add_argument("--max-results", type=int, default=10)
+    parser.add_argument("--triage", action="store_true", help="Print matching candidate messages with headers/attachments and exit")
+    parser.add_argument("--include-processed", action="store_true", help="When used with --triage, include already-processed messages")
     args = parser.parse_args()
 
     ensure_dirs()
@@ -206,6 +276,14 @@ def main() -> int:
     messages = list_matching_messages(args.query, args.max_results)
     if not messages:
         log("no matching messages")
+        return 0
+
+    if args.triage:
+        candidates = messages if args.include_processed else [m for m in messages if m.get("id") not in processed]
+        if not candidates:
+            log("no triage candidates")
+            return 0
+        print_triage(candidates, processed)
         return 0
 
     new_messages = [m for m in messages if m.get("id") not in processed]

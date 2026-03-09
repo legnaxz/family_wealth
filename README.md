@@ -89,6 +89,13 @@ cd family-wealth-mvp
 python3 scripts/banksalad_mail_import.py
 ```
 
+Inspect matching candidate emails without importing:
+
+```bash
+cd family-wealth-mvp
+python3 scripts/banksalad_mail_import.py --triage --max-results 5
+```
+
 launchd plist template:
 - `infra/com.familywealth.banksalad-mail-import.plist`
 
