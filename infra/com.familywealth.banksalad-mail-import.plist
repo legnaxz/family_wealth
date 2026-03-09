@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.familywealth.banksalad-mail-import</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3</string>
+    <string>/Users/sksbot/.openclaw/workspace/family-wealth-mvp/scripts/banksalad_mail_import.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/sksbot/.openclaw/workspace/family-wealth-mvp</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/sksbot/.openclaw/workspace/family-wealth-mvp/runtime/banksalad-mail-import/logs/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/sksbot/.openclaw/workspace/family-wealth-mvp/runtime/banksalad-mail-import/logs/launchd.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>BANKSALAD_GMAIL_QUERY</key>
+    <string>subject:&quot;정광석님의 뱅크샐러드 엑셀 내보내기 데이터&quot; has:attachment</string>
+    <key>BANKSALAD_ZIP_PASSWORD</key>
+    <string>1234</string>
+    <key>BANKSALAD_IMPORT_API</key>
+    <string>http://localhost:8000/imports/xlsx-local</string>
+  </dict>
+</dict>
+</plist>

@@ -70,6 +70,42 @@ Response:
 }
 ```
 
+## Automated BankSalad mail import
+
+A local watcher script is included at `scripts/banksalad_mail_import.py`.
+
+What it does:
+- searches Gmail for `subject:"정광석님의 뱅크샐러드 엑셀 내보내기 데이터" has:attachment`
+- downloads attachments for new matching messages only
+- extracts password-protected ZIPs with password `1234`
+- finds `.xlsx` files
+- posts them to `http://localhost:8000/imports/xlsx-local`
+- keeps processed Gmail message IDs in `runtime/banksalad-mail-import/state.json`
+
+Run once manually:
+
+```bash
+cd family-wealth-mvp
+python3 scripts/banksalad_mail_import.py
+```
+
+launchd plist template:
+- `infra/com.familywealth.banksalad-mail-import.plist`
+
+Load it on macOS:
+
+```bash
+mkdir -p ~/Library/LaunchAgents
+cp infra/com.familywealth.banksalad-mail-import.plist ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.familywealth.banksalad-mail-import.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.familywealth.banksalad-mail-import.plist
+```
+
+Logs/runtime:
+- `runtime/banksalad-mail-import/logs/latest.log`
+- `runtime/banksalad-mail-import/logs/launchd.out.log`
+- `runtime/banksalad-mail-import/logs/launchd.err.log`
+
 ## Notes
 
 - Schema is now managed by Alembic (`backend/alembic`).
