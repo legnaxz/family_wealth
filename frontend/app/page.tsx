@@ -17,6 +17,7 @@ export default function Page() {
   const [daily, setDaily] = useState<any[]>([])
   const [expenseShare, setExpenseShare] = useState<any[]>([])
   const [incomeShare, setIncomeShare] = useState<any[]>([])
+  const [holdings, setHoldings] = useState<any[]>([])
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
   const [selectedMonth, setSelectedMonth] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
@@ -49,6 +50,14 @@ export default function Page() {
     return [...a, ...b].sort((x, y) => Number(y.amount) - Number(x.amount))
   }, [incomeShare, expenseShare])
 
+  const holdingsSafe = Array.isArray(holdings) ? holdings : []
+  const holdingClassSummary = useMemo(() => {
+    const labels: Record<string, string> = { stock: '주식', etf: 'ETF', crypto: '코인' }
+    const acc = new Map<string, number>()
+    for (const h of holdingsSafe) acc.set(h.assetClass, (acc.get(h.assetClass) || 0) + 1)
+    return Array.from(acc.entries()).map(([k, v]) => ({ key: k, label: labels[k] || k, count: v }))
+  }, [holdingsSafe])
+
   const recentTransactions = useMemo(() => (dayReport?.transactions || []).slice(0, 5), [dayReport])
 
   const calendarDays = useMemo(() => {
@@ -74,7 +83,7 @@ export default function Page() {
 
   async function recompute() {
     await fetch(`${API}/snapshots/recompute?household_id=${householdId}`, { method: 'POST' })
-    await Promise.all([refresh(), loadBalanceSheet(), loadMonthly()])
+    await Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()])
   }
 
   async function refresh() {
@@ -109,6 +118,12 @@ export default function Page() {
     setBs(j && typeof j === 'object' ? j : { assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
   }
 
+  async function loadHoldings() {
+    const r = await fetch(`${API}/households/${householdId}/holdings?${qs()}`)
+    const j = await r.json()
+    setHoldings(Array.isArray(j) ? j : [])
+  }
+
   async function loadCategoryShare(monthKey?: string) {
     let y: number, m: number
     if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
@@ -133,7 +148,7 @@ export default function Page() {
   }
 
   useEffect(() => { bootstrap().then(recompute).catch(console.error) }, [])
-  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly()]).catch(console.error) }, [ownerScope])
+  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()]).catch(console.error) }, [ownerScope])
 
   useEffect(() => {
     if (!monthOptions.length) return
@@ -314,10 +329,10 @@ export default function Page() {
           </Card>
         </section>
       ) : (
-        <section className='grid grid-cols-1 gap-3 xl:grid-cols-2'>
-          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
+        <section className='grid grid-cols-1 gap-3 xl:grid-cols-3'>
+          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)] xl:col-span-2' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] xl:col-span-2'}>
             <CardContent className='p-5'>
-              <h3 className='mb-3 text-lg font-semibold'>순자산 추이</h3>
+              <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>순자산 추이</h3>
               <div style={{ width: '100%', height: 220 }}>
                 <ResponsiveContainer>
                   <LineChart data={rowsSafe}>
@@ -334,11 +349,45 @@ export default function Page() {
 
           <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
             <CardContent className='p-5'>
+              <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>보유 투자자산</h3>
+              <div className='mb-3 text-sm text-slate-600 dark:text-slate-400'>등록된 holdings <b className='text-slate-900 dark:text-slate-100'>{holdingsSafe.length}개</b></div>
+              <div className='grid gap-2'>
+                {holdingClassSummary.length ? holdingClassSummary.map((item) => (
+                  <div key={item.key} className={theme === 'dark' ? 'flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}>
+                    <span>{item.label}</span>
+                    <b className='tabular-nums text-slate-900 dark:text-slate-100'>{item.count}개</b>
+                  </div>
+                )) : <div className='text-sm text-slate-500 dark:text-slate-400'>아직 주식/코인 holdings가 없어요.</div>}
+              </div>
+              <div className='mt-4 space-y-2'>
+                {holdingsSafe.slice(0, 5).map((h: any) => (
+                  <div key={h.id} className={theme === 'dark' ? 'rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2' : 'rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2'}>
+                    <div className='flex items-center justify-between gap-3'>
+                      <div>
+                        <div className='font-medium text-slate-900 dark:text-slate-100'>{h.displayName}</div>
+                        <div className='text-xs text-slate-500 dark:text-slate-400'>{h.assetClass} · {h.symbol}</div>
+                      </div>
+                      <div className='text-right text-sm tabular-nums text-slate-900 dark:text-slate-100'>{h.quantity}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)] xl:col-span-3' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] xl:col-span-3'}>
+            <CardContent className='p-5'>
               <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>자산/부채 현황</h3>
-              <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>자산 총액 <b className='text-slate-900 dark:text-slate-100'>{won(bs.assetsTotal || 0)}</b></div>
-              {(bs.assets || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
-              <div className='mb-2 mt-4 text-sm text-slate-600 dark:text-slate-400'>부채 총액 <b className='text-slate-900 dark:text-slate-100'>{won(bs.liabilitiesTotal || 0)}</b></div>
-              {(bs.liabilities || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
+              <div className='grid gap-4 xl:grid-cols-2'>
+                <div>
+                  <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>자산 총액 <b className='text-slate-900 dark:text-slate-100'>{won(bs.assetsTotal || 0)}</b></div>
+                  {(bs.assets || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
+                </div>
+                <div>
+                  <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>부채 총액 <b className='text-slate-900 dark:text-slate-100'>{won(bs.liabilitiesTotal || 0)}</b></div>
+                  {(bs.liabilities || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </section>
