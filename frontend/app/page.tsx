@@ -22,7 +22,9 @@ export default function Page() {
   const [incomeShare, setIncomeShare] = useState<any[]>([])
   const [holdings, setHoldings] = useState<any[]>([])
   const [tickerCatalog, setTickerCatalog] = useState<any[]>([])
+  const [marketPrices, setMarketPrices] = useState<any[]>([])
   const [holdingForm, setHoldingForm] = useState({ assetClass: 'stock', symbol: '', displayName: '', quantity: '', avgBuyPrice: '', currency: 'KRW' })
+  const [priceForm, setPriceForm] = useState({ symbol: '', assetClass: 'stock', price: '', currency: 'KRW' })
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
   const [selectedMonth, setSelectedMonth] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
@@ -56,6 +58,12 @@ export default function Page() {
   }, [incomeShare, expenseShare])
 
   const holdingsSafe = Array.isArray(holdings) ? holdings : []
+  const marketPricesSafe = Array.isArray(marketPrices) ? marketPrices : []
+  const latestPriceMap = useMemo(() => {
+    const m = new Map<string, any>()
+    for (const p of marketPricesSafe) m.set(`${p.assetClass}:${p.symbol}`, p)
+    return m
+  }, [marketPricesSafe])
   const holdingClassSummary = useMemo(() => {
     const labels: Record<string, string> = { stock: '주식', etf: 'ETF', crypto: '코인' }
     const acc = new Map<string, number>()
@@ -64,6 +72,15 @@ export default function Page() {
   }, [holdingsSafe])
   const tickerCatalogSafe = Array.isArray(tickerCatalog) ? tickerCatalog : []
   const filteredTickerCatalog = useMemo(() => tickerCatalogSafe.filter((item: any) => item.assetClass === holdingForm.assetClass), [tickerCatalogSafe, holdingForm.assetClass])
+  const holdingsValuation = useMemo(() => {
+    return holdingsSafe.map((h: any) => {
+      const latest = latestPriceMap.get(`${h.assetClass}:${h.symbol}`)
+      const latestPrice = latest ? Number(latest.price || 0) : null
+      const currentValue = latestPrice != null ? latestPrice * Number(h.quantity || 0) : null
+      return { ...h, latestPrice, currentValue }
+    })
+  }, [holdingsSafe, latestPriceMap])
+  const holdingsCurrentTotal = useMemo(() => holdingsValuation.reduce((sum: number, h: any) => sum + (h.currentValue || 0), 0), [holdingsValuation])
 
   const recentTransactions = useMemo(() => (dayReport?.transactions || []).slice(0, 5), [dayReport])
 
@@ -90,7 +107,7 @@ export default function Page() {
 
   async function recompute() {
     await fetch(`${API}/snapshots/recompute?household_id=${householdId}`, { method: 'POST' })
-    await Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()])
+    await Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings(), loadMarketPrices()])
   }
 
   async function refresh() {
@@ -135,6 +152,35 @@ export default function Page() {
     const r = await fetch(`${API}/ticker-catalog`)
     const j = await r.json()
     setTickerCatalog(Array.isArray(j) ? j : [])
+  }
+
+  async function loadMarketPrices() {
+    const r = await fetch(`${API}/market-prices/latest`)
+    const j = await r.json()
+    setMarketPrices(Array.isArray(j) ? j : [])
+  }
+
+  async function submitPrice(e: React.FormEvent) {
+    e.preventDefault()
+    if (!priceForm.symbol || !priceForm.price) return
+    const r = await fetch(`${API}/market-prices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbol: priceForm.symbol,
+        asset_class: priceForm.assetClass,
+        price: Number(priceForm.price),
+        currency: priceForm.currency,
+        source: 'manual',
+      }),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`현재가 저장 실패: ${t}`)
+      return
+    }
+    setPriceForm({ symbol: '', assetClass: 'stock', price: '', currency: 'KRW' })
+    await loadMarketPrices()
   }
 
   async function submitHolding(e: React.FormEvent) {
@@ -188,8 +234,8 @@ export default function Page() {
     await recompute()
   }
 
-  useEffect(() => { bootstrap().then(recompute).catch(console.error); loadTickerCatalog().catch(console.error) }, [])
-  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()]).catch(console.error) }, [ownerScope])
+  useEffect(() => { bootstrap().then(recompute).catch(console.error); Promise.all([loadTickerCatalog(), loadMarketPrices()]).catch(console.error) }, [])
+  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings(), loadMarketPrices()]).catch(console.error) }, [ownerScope])
 
   useEffect(() => {
     if (!monthOptions.length) return
@@ -430,7 +476,7 @@ export default function Page() {
                 </div>
                 <button type='submit' className={theme === 'dark' ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-white/90' : 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800'}>투자자산 추가</button>
               </form>
-              <div className='mb-3 text-sm text-slate-600 dark:text-slate-400'>등록된 holdings <b className='text-slate-900 dark:text-slate-100'>{holdingsSafe.length}개</b></div>
+              <div className='mb-3 text-sm text-slate-600 dark:text-slate-400'>등록된 holdings <b className='text-slate-900 dark:text-slate-100'>{holdingsSafe.length}개</b> · 현재 평가합 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(holdingsCurrentTotal)} masked={privacyMasked} /></b></div>
               <div className='grid gap-2'>
                 {holdingClassSummary.length ? holdingClassSummary.map((item) => (
                   <div key={item.key} className={theme === 'dark' ? 'flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}>
@@ -439,15 +485,28 @@ export default function Page() {
                   </div>
                 )) : <div className='text-sm text-slate-500 dark:text-slate-400'>아직 주식/코인 holdings가 없어요.</div>}
               </div>
+              <form onSubmit={submitPrice} className={theme === 'dark' ? 'mb-4 grid gap-2 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3' : 'mb-4 grid gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3'}>
+                <div className='grid grid-cols-3 gap-2'>
+                  <input value={priceForm.symbol} onChange={(e) => setPriceForm((f) => ({ ...f, symbol: e.target.value.toUpperCase() }))} placeholder='심볼' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                  <select value={priceForm.assetClass} onChange={(e) => setPriceForm((f) => ({ ...f, assetClass: e.target.value }))} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
+                    <option value='stock'>주식</option><option value='etf'>ETF</option><option value='crypto'>코인</option>
+                  </select>
+                  <input value={priceForm.price} onChange={(e) => setPriceForm((f) => ({ ...f, price: e.target.value }))} placeholder='현재가' inputMode='decimal' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                </div>
+                <button type='submit' className={theme === 'dark' ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-white/90' : 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800'}>현재가 저장</button>
+              </form>
               <div className='mt-4 space-y-2'>
-                {holdingsSafe.slice(0, 5).map((h: any) => (
+                {holdingsValuation.slice(0, 8).map((h: any) => (
                   <div key={h.id} className={theme === 'dark' ? 'rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2' : 'rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2'}>
                     <div className='flex items-center justify-between gap-3'>
                       <div>
                         <div className='font-medium text-slate-900 dark:text-slate-100'>{h.displayName}</div>
                         <div className='text-xs text-slate-500 dark:text-slate-400'>{h.assetClass} · {h.symbol}</div>
                       </div>
-                      <div className='text-right text-sm tabular-nums text-slate-900 dark:text-slate-100'>{h.quantity}</div>
+                      <div className='text-right text-sm tabular-nums text-slate-900 dark:text-slate-100'>
+                        <div>{h.quantity}</div>
+                        <div className='text-xs text-slate-500 dark:text-slate-400'>{h.latestPrice != null ? `현재가 ${h.currency} ${Number(h.latestPrice).toLocaleString()}` : '현재가 미등록'}</div>
+                      </div>
                     </div>
                   </div>
                 ))}
