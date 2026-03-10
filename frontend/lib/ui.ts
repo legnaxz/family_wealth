@@ -42,9 +42,21 @@ export const CAT_ICON: Record<string, string> = {
   '교육': '📚', '교육/학습': '📚', '의료': '🏥', '의료/건강': '🏥', '주거/통신': '🏡', '카페/간식': '☕', '패션/쇼핑': '👕', '미분류': '📌'
 }
 
-export function heatColor(net: number, maxAbs: number) {
-  if (maxAbs <= 0) return { bg: '#f8fafc', text: '#334155' }
+export function heatColor(net: number, maxAbs: number, theme: 'light' | 'dark' = 'light') {
+  if (maxAbs <= 0) {
+    return theme === 'dark'
+      ? { bg: 'rgba(255,255,255,0.03)', text: '#cbd5e1' }
+      : { bg: '#f8fafc', text: '#334155' }
+  }
   const t = Math.min(1, Math.abs(net) / maxAbs)
+  if (theme === 'dark') {
+    if (net >= 0) {
+      const a = 0.16 + t * 0.42
+      return { bg: `rgba(16,185,129,${a})`, text: t > 0.48 ? '#f8fafc' : '#d1fae5' }
+    }
+    const a = 0.18 + t * 0.48
+    return { bg: `rgba(59,130,246,${a})`, text: t > 0.48 ? '#f8fafc' : '#dbeafe' }
+  }
   if (net >= 0) {
     const a = 0.12 + t * 0.55
     return { bg: `rgba(239,68,68,${a})`, text: t > 0.55 ? '#fff' : '#7f1d1d' }

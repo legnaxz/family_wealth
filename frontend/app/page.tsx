@@ -159,14 +159,14 @@ export default function Page() {
   }, [theme])
 
   return (
-    <main className={theme === 'dark' ? 'min-h-screen bg-slate-950 px-4 py-4 text-slate-50' : 'min-h-screen bg-slate-100 px-4 py-4 text-slate-900'} style={{ fontFamily: 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter, sans-serif' }}>
-      <section className={theme === 'dark' ? 'mb-4 overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.88))] p-5 shadow-2xl shadow-black/25 sm:p-6' : 'mb-4 overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] p-5 shadow-xl shadow-slate-200/60 sm:p-6'}>
+    <main className={theme === 'dark' ? 'min-h-screen bg-[#0b0f14] px-4 py-4 text-slate-100' : 'min-h-screen bg-slate-100 px-4 py-4 text-slate-900'} style={{ fontFamily: 'Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter, sans-serif' }}>
+      <section className={theme === 'dark' ? 'mb-4 overflow-hidden rounded-[28px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(17,24,39,0.94),rgba(15,23,42,0.88))] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.28)] sm:p-6' : 'mb-4 overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] p-5 shadow-xl shadow-slate-200/60 sm:p-6'}>
         <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
           <div className='space-y-3'>
-            <div className={theme === 'dark' ? 'inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300' : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600'}>Family Wealth Dashboard</div>
+            <div className={theme === 'dark' ? 'inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300' : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-700'}>Family Wealth Dashboard</div>
             <div>
               <h1 className='m-0 text-2xl font-semibold tracking-tight sm:text-3xl'>광석 재무 대시보드</h1>
-              <p className={theme === 'dark' ? 'mt-2 max-w-xl text-sm text-slate-400' : 'mt-2 max-w-xl text-sm text-slate-600'}>자산, 부채, 순자산과 이번 달 흐름을 먼저 보여주는 개인 재무 홈.</p>
+              <p className={theme === 'dark' ? 'mt-2 max-w-xl text-sm text-slate-300' : 'mt-2 max-w-xl text-sm text-slate-700'}>자산, 부채, 순자산과 이번 달 흐름을 먼저 보여주는 개인 재무 홈.</p>
             </div>
           </div>
           <div className='flex flex-col items-stretch gap-3 sm:items-end'>
@@ -186,72 +186,72 @@ export default function Page() {
       <section className='mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4'>
         <Card className={theme === 'dark' ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white'}>
           <CardContent className='p-5'>
-            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground'>자산 총액</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight sm:text-[2rem]'>{won(assetsTotal)}</div>
-            <div className='mt-2 text-sm text-emerald-500'>보유 자산 기준</div>
+            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>자산 총액</div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'>{won(assetsTotal)}</div>
+            <div className='mt-2 text-sm text-emerald-600 dark:text-emerald-400'>보유 자산 기준</div>
           </CardContent>
         </Card>
-        <Card className={theme === 'dark' ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white'}>
+        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
-            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground'>부채 총액</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight sm:text-[2rem]'>{won(liabilitiesTotal)}</div>
-            <div className='mt-2 text-sm text-rose-500'>대출 및 기타 부채</div>
+            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>부채 총액</div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'>{won(liabilitiesTotal)}</div>
+            <div className='mt-2 text-sm text-rose-400/90'>대출 및 기타 부채</div>
           </CardContent>
         </Card>
-        <Card className={theme === 'dark' ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white'}>
+        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
-            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground'>순자산</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight sm:text-[2rem]'>{won(latestNetWorth)}</div>
-            <div className='mt-2 text-sm text-cyan-500'>자산 - 부채</div>
+            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>순자산</div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'>{won(latestNetWorth)}</div>
+            <div className='mt-2 text-sm text-cyan-600 dark:text-cyan-400'>자산 - 부채</div>
           </CardContent>
         </Card>
-        <Card className={theme === 'dark' ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white'}>
+        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
-            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground'>이번 달 순현금흐름</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight sm:text-[2rem]'>{won(latestMonth?.cashflow || 0)}</div>
-            <div className='mt-2 text-sm text-slate-500'>이번 달 기준</div>
+            <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>이번 달 순현금흐름</div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'>{won(latestMonth?.cashflow || 0)}</div>
+            <div className='mt-2 text-sm text-slate-300'>이번 달 기준</div>
           </CardContent>
         </Card>
       </section>
 
       <section className='mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr,1fr]'>
-        <Card className={theme === 'dark' ? 'border-white/10 bg-slate-900/80' : 'border-slate-200 bg-white'}>
+        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5 sm:p-6'>
             <div className='mb-3 flex items-center justify-between'>
-              <h3 className='text-base font-semibold sm:text-lg'>최근 기록</h3>
+              <h3 className='text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg'>최근 기록</h3>
               <span className='text-xs text-muted-foreground'>최근 5건</span>
             </div>
-            <div className='max-h-60 overflow-auto'>
+            <div className='max-h-72 overflow-auto pr-1'>
               {recentTransactions.length ? recentTransactions.map((t: any, i: number) => {
                 const isIncome = t.type === '수입'
                 return (
-                  <div key={i} className={theme === 'dark' ? 'flex items-center justify-between gap-3 border-b border-white/5 py-3 last:border-0' : 'flex items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-0'}>
+                  <div key={i} className={theme === 'dark' ? 'flex items-center justify-between gap-3 rounded-2xl border border-white/[0.04] bg-white/[0.02] px-3 py-3 mb-2 last:mb-0' : 'flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3 mb-2 last:mb-0'}>
                     <div>
-                      <div className='font-semibold'>{t.content || t.category}</div>
-                      <div className={theme === 'dark' ? 'text-xs text-slate-400' : 'text-xs text-slate-500'}>{CAT_ICON[t.category] || '📌'} {t.category} · {t.ownerScope}</div>
+                      <div className='font-semibold text-slate-900 dark:text-slate-100'>{t.content || t.category}</div>
+                      <div className={theme === 'dark' ? 'text-xs text-slate-300' : 'text-xs text-slate-300'}>{CAT_ICON[t.category] || '📌'} {t.category} · {t.ownerScope}</div>
                     </div>
-                    <div className='text-right'>
+                    <div className='text-right tabular-nums min-w-[88px]'>
                       <div className={isIncome ? 'font-bold text-rose-400' : 'font-bold text-blue-400'}>{isIncome ? '+' : '-'}{won(Math.abs(t.amount || 0))}</div>
                     </div>
                   </div>
                 )
-              }) : <div className={theme === 'dark' ? 'text-sm text-slate-400' : 'text-sm text-slate-500'}>선택한 날짜의 거래가 아직 없어요.</div>}
+              }) : <div className={theme === 'dark' ? 'text-sm text-slate-300' : 'text-sm text-slate-300'}>선택한 날짜의 거래가 아직 없어요.</div>}
             </div>
           </CardContent>
         </Card>
 
-        <Card className={theme === 'dark' ? 'border-white/10 bg-slate-900/80' : 'border-slate-200 bg-white'}>
+        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5 sm:p-6'>
             <div className='mb-3 flex items-center justify-between'>
-              <h3 className='text-base font-semibold sm:text-lg'>선택일 요약</h3>
+              <h3 className='text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg'>선택일 요약</h3>
               <span className='text-xs text-muted-foreground'>{dayReport?.date || selectedDate || '-'}</span>
             </div>
-            <div className='mb-1 text-sm text-rose-400'>수입 {won(dayReport?.income || 0)}</div>
-            <div className='mb-1 text-sm text-blue-400'>지출 {won(dayReport?.expense || 0)}</div>
-            <div className='mb-4 text-sm font-medium'>순흐름 {won(dayReport?.net || 0)}</div>
-            <div className='grid gap-2'>
+            <div className='mb-1 text-sm font-medium text-rose-500 dark:text-rose-400'>수입 {won(dayReport?.income || 0)}</div>
+            <div className='mb-1 text-sm font-medium text-blue-600 dark:text-blue-400'>지출 {won(dayReport?.expense || 0)}</div>
+            <div className='mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100'>순흐름 {won(dayReport?.net || 0)}</div>
+            <div className='grid gap-2.5'>
               {(dayReport?.categories || []).slice(0, 5).map((c: any, i: number) => (
-                <div key={i} className='flex justify-between text-sm'>
+                <div key={i} className={theme === 'dark' ? 'flex justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm' : 'flex justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm'}>
                   <span>{CAT_ICON[c.category] || '📌'} {c.category}</span>
                   <b>{won(c.amount)}</b>
                 </div>
@@ -263,22 +263,22 @@ export default function Page() {
 
       {activeTab === 'calendar' ? (
         <section className='grid grid-cols-1 gap-3 xl:grid-cols-[2fr,1fr]'>
-          <Card className={theme === 'dark' ? 'border-white/10 bg-slate-900/80' : 'border-slate-200 bg-white'}>
+          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
             <CardContent className='p-5'>
               <div className='mb-3 flex items-center justify-between gap-3'>
-                <h3 className='text-lg font-semibold'>현금흐름 달력</h3>
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className={theme === 'dark' ? 'rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
+                <h3 className='text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>현금흐름 달력</h3>
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
                   {monthOptions.map((m: string) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              <div className='grid grid-cols-7 gap-2'>
-                {['일', '월', '화', '수', '목', '금', '토'].map((d) => <div key={d} className={theme === 'dark' ? 'text-center text-xs text-slate-500' : 'text-center text-xs text-slate-500'}>{d}</div>)}
+              <div className='grid grid-cols-7 gap-2.5'>
+                {['일', '월', '화', '수', '목', '금', '토'].map((d) => <div key={d} className={theme === 'dark' ? 'text-center text-xs text-slate-700' : 'text-center text-xs text-slate-300'}>{d}</div>)}
                 {calendarDays.map((d: any) => {
                   if (d.empty) return <div key={d.key} />
-                  const hc = heatColor(Number(d.net || 0), maxAbsDailyNet)
+                  const hc = heatColor(Number(d.net || 0), maxAbsDailyNet, theme)
                   return (
-                    <button key={d.iso} onClick={() => setSelectedDate(d.iso)} className={theme === 'dark' ? 'min-h-[76px] rounded-2xl border border-white/10 p-2 text-left transition hover:border-cyan-400/40' : 'min-h-[76px] rounded-2xl border border-slate-200 p-2 text-left transition hover:border-cyan-400/40'} style={{ background: hc.bg }}>
-                      <div style={{ color: hc.text }} className='mb-1 text-xs font-bold'>{d.day}</div>
+                    <button key={d.iso} onClick={() => setSelectedDate(d.iso)} className={theme === 'dark' ? 'min-h-[78px] rounded-[20px] border border-white/[0.07] p-2.5 text-left transition hover:border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]' : 'min-h-[76px] rounded-2xl border border-slate-200 p-2 text-left transition hover:border-cyan-400/40'} style={{ background: hc.bg }}>
+                      <div style={{ color: hc.text }} className='mb-1 text-[11px] font-semibold tracking-tight'>{d.day}</div>
                       {d.net !== 0 && <div style={{ color: hc.text }} className='text-[11px]'>{won(d.net)}</div>}
                       {d.income > 0 && <div style={{ color: hc.text }} className='text-[10px]'>+{won(d.income)}</div>}
                       {d.expense > 0 && <div style={{ color: hc.text }} className='text-[10px]'>-{won(d.expense)}</div>}
@@ -289,19 +289,19 @@ export default function Page() {
             </CardContent>
           </Card>
 
-          <Card className={theme === 'dark' ? 'border-white/10 bg-slate-900/80' : 'border-slate-200 bg-white'}>
+          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
             <CardContent className='p-5'>
-              <h3 className='mb-3 text-lg font-semibold'>월 카테고리</h3>
+              <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>월 카테고리</h3>
               <div className='grid gap-2'>
                 {mergedCategories.slice(0, 10).map((c: any, i: number) => {
                   const isIncome = c.type === '수입'
                   const color = isIncome ? THEME.income : THEME.expense
                   const bg = isIncome ? THEME.incomeSoft : THEME.expenseSoft
                   return (
-                    <div key={i} className={theme === 'dark' ? 'rounded-2xl border border-white/8 bg-white/5 p-3' : 'rounded-2xl border border-slate-100 bg-slate-50 p-3'}>
-                      <div className='flex justify-between text-sm'>
-                        <span>{CAT_ICON[c.category] || '📌'} {c.category}</span>
-                        <b style={{ color }}>{isIncome ? '+' : '-'}{won(c.amount)}</b>
+                    <div key={i} className={theme === 'dark' ? 'rounded-2xl border border-white/[0.05] bg-white/[0.03] p-3' : 'rounded-2xl border border-slate-100 bg-slate-50 p-3'}>
+                      <div className='flex items-center justify-between gap-3 text-sm'>
+                        <span className={theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}>{CAT_ICON[c.category] || '📌'} {c.category}</span>
+                        <b style={{ color }} className='tabular-nums'>{isIncome ? '+' : '-'}{won(c.amount)}</b>
                       </div>
                       <div className='mt-2 h-2 rounded-full' style={{ background: bg }}>
                         <div style={{ width: `${Math.min(100, c.weight)}%`, height: 8, background: color, borderRadius: 999 }} />
@@ -315,15 +315,15 @@ export default function Page() {
         </section>
       ) : (
         <section className='grid grid-cols-1 gap-3 xl:grid-cols-2'>
-          <Card className={theme === 'dark' ? 'border-white/10 bg-slate-900/80' : 'border-slate-200 bg-white'}>
+          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
             <CardContent className='p-5'>
               <h3 className='mb-3 text-lg font-semibold'>순자산 추이</h3>
               <div style={{ width: '100%', height: 220 }}>
                 <ResponsiveContainer>
                   <LineChart data={rowsSafe}>
-                    <CartesianGrid strokeDasharray='3 3' stroke={theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'} />
-                    <XAxis dataKey='date' tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#64748b' }} minTickGap={24} />
-                    <YAxis width={92} tickFormatter={(v) => won(Number(v))} tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#64748b' }} />
+                    <CartesianGrid strokeDasharray='3 3' stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0'} />
+                    <XAxis dataKey='date' tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} minTickGap={24} />
+                    <YAxis width={92} tickFormatter={(v) => won(Number(v))} tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} />
                     <Tooltip formatter={(v: any) => won(Number(v))} />
                     <Line type='monotone' dataKey='netWorth' stroke='#10b981' strokeWidth={2} dot={false} />
                   </LineChart>
@@ -332,13 +332,13 @@ export default function Page() {
             </CardContent>
           </Card>
 
-          <Card className={theme === 'dark' ? 'border-white/10 bg-slate-900/80' : 'border-slate-200 bg-white'}>
+          <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
             <CardContent className='p-5'>
-              <h3 className='mb-3 text-lg font-semibold'>자산/부채 현황</h3>
-              <div className='mb-2 text-sm text-muted-foreground'>자산 총액 <b className='text-foreground'>{won(bs.assetsTotal || 0)}</b></div>
-              {(bs.assets || []).slice(0, 5).map((x: any, i: number) => <div key={i} className='mb-2 flex items-center justify-between rounded-xl px-2 py-1 text-sm'><span className='truncate pr-3'>{x.name}</span><b>{x.weight}%</b></div>)}
-              <div className='mb-2 mt-4 text-sm text-muted-foreground'>부채 총액 <b className='text-foreground'>{won(bs.liabilitiesTotal || 0)}</b></div>
-              {(bs.liabilities || []).slice(0, 5).map((x: any, i: number) => <div key={i} className='mb-2 flex items-center justify-between rounded-xl px-2 py-1 text-sm'><span className='truncate pr-3'>{x.name}</span><b>{x.weight}%</b></div>)}
+              <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>자산/부채 현황</h3>
+              <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>자산 총액 <b className='text-slate-900 dark:text-slate-100'>{won(bs.assetsTotal || 0)}</b></div>
+              {(bs.assets || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
+              <div className='mb-2 mt-4 text-sm text-slate-600 dark:text-slate-400'>부채 총액 <b className='text-slate-900 dark:text-slate-100'>{won(bs.liabilitiesTotal || 0)}</b></div>
+              {(bs.liabilities || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
             </CardContent>
           </Card>
         </section>
