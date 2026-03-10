@@ -325,54 +325,6 @@ export default function Page() {
         </Card>
       </section>
 
-      <section className='mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[2fr,1fr]'>
-        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
-          <CardContent className='p-5'>
-            <div className='mb-3 flex items-center justify-between gap-3'>
-              <h3 className='text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>현금흐름 달력</h3>
-              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
-                {monthOptions.map((m: string) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div className='grid grid-cols-7 gap-2.5'>
-              {['일', '월', '화', '수', '목', '금', '토'].map((d) => <div key={d} className={theme === 'dark' ? 'text-center text-xs text-slate-700' : 'text-center text-xs text-slate-300'}>{d}</div>)}
-              {calendarDays.map((d: any) => {
-                if (d.empty) return <div key={d.key} />
-                const hc = heatColor(Number(d.net || 0), maxAbsDailyNet, theme)
-                return (
-                  <button key={d.iso} onClick={() => setSelectedDate(d.iso)} className={theme === 'dark' ? 'min-h-[78px] rounded-[20px] border border-white/[0.07] p-2.5 text-left transition hover:border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]' : 'min-h-[76px] rounded-2xl border border-slate-200 p-2 text-left transition hover:border-cyan-400/40'} style={{ background: hc.bg }}>
-                    <div style={{ color: hc.text }} className='mb-1 text-[11px] font-semibold tracking-tight'>{d.day}</div>
-                    {d.net !== 0 && <div style={{ color: hc.text }} className='text-[11px]'><MaskedValue value={won(d.net)} masked={privacyMasked} /></div>}
-                    {d.income > 0 && <div style={{ color: hc.text }} className='text-[10px]'>+<MaskedValue value={won(d.income)} masked={privacyMasked} /></div>}
-                    {d.expense > 0 && <div style={{ color: hc.text }} className='text-[10px]'>-<MaskedValue value={won(d.expense)} masked={privacyMasked} /></div>}
-                  </button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
-          <CardContent className='p-5 sm:p-6'>
-            <div className='mb-3 flex items-center justify-between'>
-              <h3 className='text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg'>선택일 요약</h3>
-              <span className='text-xs text-muted-foreground'>{dayReport?.date || selectedDate || '-'}</span>
-            </div>
-            <div className='mb-1 text-sm font-medium text-rose-500 dark:text-rose-400'>수입 <MaskedValue value={won(dayReport?.income || 0)} masked={privacyMasked} /></div>
-            <div className='mb-1 text-sm font-medium text-blue-600 dark:text-blue-400'>지출 <MaskedValue value={won(dayReport?.expense || 0)} masked={privacyMasked} /></div>
-            <div className='mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100'>순흐름 <MaskedValue value={won(dayReport?.net || 0)} masked={privacyMasked} /></div>
-            <div className='grid gap-2.5'>
-              {(dayReport?.categories || []).slice(0, 5).map((c: any, i: number) => (
-                <div key={i} className={theme === 'dark' ? 'flex justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'flex justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}>
-                  <span>{CAT_ICON[c.category] || '📌'} {c.category}</span>
-                  <b><MaskedValue value={won(c.amount)} masked={privacyMasked} /></b>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
       {activeTab === 'calendar' ? (
         <section className='grid grid-cols-1 gap-3 xl:grid-cols-[2fr,1fr]'>
           <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
