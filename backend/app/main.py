@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, delete, or_
 from sqlalchemy.orm import Session
 from openpyxl import load_workbook
 
@@ -420,6 +420,19 @@ def import_xlsx(household_id: int = 1, owner_scope: str = "self", file: UploadFi
         ws0 = wb["뱅샐현황"]
         as_of = date.today()
 
+        prior_asset_ids = db.scalars(select(Asset.id).where(Asset.household_id == household_id, Asset.owner_scope == owner_scope)).all()
+        prior_liability_ids = db.scalars(select(Liability.id).where(Liability.household_id == household_id, Liability.owner_scope == owner_scope)).all()
+        if prior_asset_ids or prior_liability_ids:
+            delete_stmt = delete(Valuation).where(Valuation.household_id == household_id, Valuation.owner_scope == owner_scope, Valuation.as_of_date == as_of)
+            if prior_asset_ids and prior_liability_ids:
+                delete_stmt = delete_stmt.where(or_(Valuation.asset_id.in_(prior_asset_ids), Valuation.liability_id.in_(prior_liability_ids)))
+            elif prior_asset_ids:
+                delete_stmt = delete_stmt.where(Valuation.asset_id.in_(prior_asset_ids))
+            else:
+                delete_stmt = delete_stmt.where(Valuation.liability_id.in_(prior_liability_ids))
+            db.execute(delete_stmt)
+            db.flush()
+
         in_financial_section = False
         for row in ws0.iter_rows(min_row=1, values_only=True):
             vals = list(row)
@@ -470,6 +483,20 @@ def import_xlsx(household_id: int = 1, owner_scope: str = "self", file: UploadFi
                     db.flush()
                 db.add(Valuation(household_id=household_id, owner_scope=owner_scope, liability_id=l.id, as_of_date=as_of, amount=liab_amount))
                 imported_liabilities += 1
+
+        # same owner/date valuation snapshot should replace prior imported snapshot rows
+        prior_asset_ids = db.scalars(select(Asset.id).where(Asset.household_id == household_id, Asset.owner_scope == owner_scope)).all()
+        prior_liability_ids = db.scalars(select(Liability.id).where(Liability.household_id == household_id, Liability.owner_scope == owner_scope)).all()
+        if prior_asset_ids or prior_liability_ids:
+            delete_stmt = delete(Valuation).where(Valuation.household_id == household_id, Valuation.owner_scope == owner_scope, Valuation.as_of_date == as_of)
+            if prior_asset_ids and prior_liability_ids:
+                delete_stmt = delete_stmt.where(or_(Valuation.asset_id.in_(prior_asset_ids), Valuation.liability_id.in_(prior_liability_ids)))
+            elif prior_asset_ids:
+                delete_stmt = delete_stmt.where(Valuation.asset_id.in_(prior_asset_ids))
+            else:
+                delete_stmt = delete_stmt.where(Valuation.liability_id.in_(prior_liability_ids))
+            db.execute(delete_stmt)
+            db.flush()
 
         # sheet1 결과는 먼저 커밋(이후 거래중복 등으로 롤백되지 않게)
         db.commit()
