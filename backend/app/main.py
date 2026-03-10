@@ -3,6 +3,8 @@ from collections import defaultdict
 import hashlib
 import secrets
 import os
+import json
+import urllib.request
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -480,18 +482,65 @@ def ticker_catalog(asset_class: str | None = None):
     catalog = [
         {"assetClass": "stock", "symbol": "005930", "displayName": "삼성전자", "currency": "KRW"},
         {"assetClass": "stock", "symbol": "000660", "displayName": "SK하이닉스", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "035420", "displayName": "NAVER", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "005380", "displayName": "현대차", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "068270", "displayName": "셀트리온", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "105560", "displayName": "KB금융", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "207940", "displayName": "삼성바이오로직스", "currency": "KRW"},
         {"assetClass": "stock", "symbol": "AAPL", "displayName": "Apple", "currency": "USD"},
         {"assetClass": "stock", "symbol": "TSLA", "displayName": "Tesla", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "NVDA", "displayName": "NVIDIA", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "MSFT", "displayName": "Microsoft", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "GOOGL", "displayName": "Alphabet", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "AMZN", "displayName": "Amazon", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "META", "displayName": "Meta", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "PLTR", "displayName": "Palantir", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "GOOGL", "displayName": "Alphabet Class A", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "VRT", "displayName": "Vertiv", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "XPON", "displayName": "Expion360 Inc", "currency": "USD"},
         {"assetClass": "etf", "symbol": "VOO", "displayName": "Vanguard S&P 500 ETF", "currency": "USD"},
         {"assetClass": "etf", "symbol": "QQQ", "displayName": "Invesco QQQ", "currency": "USD"},
+        {"assetClass": "etf", "symbol": "SPY", "displayName": "SPDR S&P 500 ETF", "currency": "USD"},
+        {"assetClass": "etf", "symbol": "SCHD", "displayName": "Schwab U.S. Dividend Equity ETF", "currency": "USD"},
+        {"assetClass": "etf", "symbol": "SOXX", "displayName": "iShares Semiconductor ETF", "currency": "USD"},
         {"assetClass": "crypto", "symbol": "BTC", "displayName": "Bitcoin", "currency": "KRW"},
         {"assetClass": "crypto", "symbol": "ETH", "displayName": "Ethereum", "currency": "KRW"},
         {"assetClass": "crypto", "symbol": "SOL", "displayName": "Solana", "currency": "KRW"},
         {"assetClass": "crypto", "symbol": "XRP", "displayName": "XRP", "currency": "KRW"},
+        {"assetClass": "crypto", "symbol": "DOGE", "displayName": "Dogecoin", "currency": "KRW"},
+        {"assetClass": "crypto", "symbol": "ADA", "displayName": "Cardano", "currency": "KRW"},
+        {"assetClass": "crypto", "symbol": "SUI", "displayName": "Sui", "currency": "KRW"},
     ]
     if asset_class:
         catalog = [c for c in catalog if c["assetClass"] == asset_class]
     return catalog
+
+
+@app.post("/market-prices/refresh-crypto")
+def refresh_crypto_prices(household_id: int = 1, owner_scope: str = "all", db: Session = Depends(get_db)):
+    scopes = owner_scopes_for_view(owner_scope)
+    rows = db.scalars(select(Holding).where(Holding.household_id == household_id, Holding.owner_scope.in_(scopes), Holding.asset_class == "crypto")).all()
+    symbols = sorted({r.symbol.upper() for r in rows if r.symbol})
+    if not symbols:
+        return {"updated": 0, "symbols": []}
+    markets = [f"KRW-{s}" for s in symbols]
+    url = f"https://api.upbit.com/v1/ticker?markets={','.join(markets)}"
+    with urllib.request.urlopen(url, timeout=20) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    updated = 0
+    now = datetime.utcnow()
+    for item in payload:
+        market = item.get("market", "")
+        if not market.startswith("KRW-"):
+            continue
+        symbol = market.split("-", 1)[1]
+        price = float(item.get("trade_price") or 0)
+        if price <= 0:
+            continue
+        db.add(MarketPrice(symbol=symbol, asset_class="crypto", price=price, currency="KRW", source="upbit", fetched_at=now))
+        updated += 1
+    db.commit()
+    return {"updated": updated, "symbols": symbols}
 
 
 @app.post("/imports/xlsx")

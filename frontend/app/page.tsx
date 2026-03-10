@@ -155,6 +155,7 @@ export default function Page() {
   }
 
   async function loadMarketPrices() {
+    await fetch(`${API}/market-prices/refresh-crypto?household_id=${householdId}&${qs()}`, { method: 'POST' })
     const r = await fetch(`${API}/market-prices/latest`)
     const j = await r.json()
     setMarketPrices(Array.isArray(j) ? j : [])
