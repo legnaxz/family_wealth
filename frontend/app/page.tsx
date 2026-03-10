@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { OwnerTabs } from '../components/OwnerTabs'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { PrivacyToggle } from '../components/PrivacyToggle'
 import { MaskedValue } from '../components/MaskedValue'
 import { Card, CardContent } from '../components/ui/card'
 import { API, CAT_ICON, OwnerScope, THEME, card, heatColor, won } from '../lib/ui'
@@ -13,6 +14,7 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'insights'>('calendar')
   const [ownerScope, setOwnerScope] = useState<OwnerScope>('self')
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [privacyMasked, setPrivacyMasked] = useState(true)
   const [rows, setRows] = useState<any[]>([])
   const [monthly, setMonthly] = useState<any[]>([])
   const [daily, setDaily] = useState<any[]>([])
@@ -216,6 +218,7 @@ export default function Page() {
           </div>
           <div className='flex flex-col items-stretch gap-3 sm:items-end'>
             <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
+            <PrivacyToggle masked={privacyMasked} onToggle={() => setPrivacyMasked((v) => !v)} />
             <OwnerTabs value={ownerScope} onChange={setOwnerScope} />
           </div>
         </div>
@@ -232,28 +235,28 @@ export default function Page() {
         <Card className={theme === 'dark' ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white'}>
           <CardContent className='p-5'>
             <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>자산 총액</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(assetsTotal)} /></div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(assetsTotal)} masked={privacyMasked} /></div>
             <div className='mt-2 text-sm text-emerald-600 dark:text-emerald-400'>보유 자산 기준</div>
           </CardContent>
         </Card>
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
             <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>부채 총액</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(liabilitiesTotal)} /></div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(liabilitiesTotal)} masked={privacyMasked} /></div>
             <div className='mt-2 text-sm text-rose-400/90'>대출 및 기타 부채</div>
           </CardContent>
         </Card>
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
             <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>순자산</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(latestNetWorth)} /></div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(latestNetWorth)} masked={privacyMasked} /></div>
             <div className='mt-2 text-sm text-cyan-600 dark:text-cyan-400'>자산 - 부채</div>
           </CardContent>
         </Card>
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
             <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>이번 달 순현금흐름</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(latestMonth?.cashflow || 0)} /></div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(latestMonth?.cashflow || 0)} masked={privacyMasked} /></div>
             <div className='mt-2 text-sm text-slate-300'>이번 달 기준</div>
           </CardContent>
         </Card>
@@ -276,7 +279,7 @@ export default function Page() {
                       <div className={theme === 'dark' ? 'text-xs text-slate-300' : 'text-xs text-slate-300'}>{CAT_ICON[t.category] || '📌'} {t.category} · {t.ownerScope}</div>
                     </div>
                     <div className='text-right tabular-nums min-w-[88px]'>
-                      <div className={isIncome ? 'font-bold text-rose-400' : 'font-bold text-blue-400'}>{isIncome ? '+' : '-'}<MaskedValue value={won(Math.abs(t.amount || 0))} /></div>
+                      <div className={isIncome ? 'font-bold text-rose-400' : 'font-bold text-blue-400'}>{isIncome ? '+' : '-'}<MaskedValue value={won(Math.abs(t.amount || 0))} masked={privacyMasked} /></div>
                     </div>
                   </div>
                 )
@@ -291,14 +294,14 @@ export default function Page() {
               <h3 className='text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg'>선택일 요약</h3>
               <span className='text-xs text-muted-foreground'>{dayReport?.date || selectedDate || '-'}</span>
             </div>
-            <div className='mb-1 text-sm font-medium text-rose-500 dark:text-rose-400'>수입 <MaskedValue value={won(dayReport?.income || 0)} /></div>
-            <div className='mb-1 text-sm font-medium text-blue-600 dark:text-blue-400'>지출 <MaskedValue value={won(dayReport?.expense || 0)} /></div>
-            <div className='mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100'>순흐름 <MaskedValue value={won(dayReport?.net || 0)} /></div>
+            <div className='mb-1 text-sm font-medium text-rose-500 dark:text-rose-400'>수입 <MaskedValue value={won(dayReport?.income || 0)} masked={privacyMasked} /></div>
+            <div className='mb-1 text-sm font-medium text-blue-600 dark:text-blue-400'>지출 <MaskedValue value={won(dayReport?.expense || 0)} masked={privacyMasked} /></div>
+            <div className='mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100'>순흐름 <MaskedValue value={won(dayReport?.net || 0)} masked={privacyMasked} /></div>
             <div className='grid gap-2.5'>
               {(dayReport?.categories || []).slice(0, 5).map((c: any, i: number) => (
                 <div key={i} className={theme === 'dark' ? 'flex justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm' : 'flex justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm'}>
                   <span>{CAT_ICON[c.category] || '📌'} {c.category}</span>
-                  <b><MaskedValue value={won(c.amount)} /></b>
+                  <b><MaskedValue value={won(c.amount)} masked={privacyMasked} /></b>
                 </div>
               ))}
             </div>
@@ -324,9 +327,9 @@ export default function Page() {
                   return (
                     <button key={d.iso} onClick={() => setSelectedDate(d.iso)} className={theme === 'dark' ? 'min-h-[78px] rounded-[20px] border border-white/[0.07] p-2.5 text-left transition hover:border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]' : 'min-h-[76px] rounded-2xl border border-slate-200 p-2 text-left transition hover:border-cyan-400/40'} style={{ background: hc.bg }}>
                       <div style={{ color: hc.text }} className='mb-1 text-[11px] font-semibold tracking-tight'>{d.day}</div>
-                      {d.net !== 0 && <div style={{ color: hc.text }} className='text-[11px]'><MaskedValue value={won(d.net)} /></div>}
-                      {d.income > 0 && <div style={{ color: hc.text }} className='text-[10px]'>+<MaskedValue value={won(d.income)} /></div>}
-                      {d.expense > 0 && <div style={{ color: hc.text }} className='text-[10px]'>-<MaskedValue value={won(d.expense)} /></div>}
+                      {d.net !== 0 && <div style={{ color: hc.text }} className='text-[11px]'><MaskedValue value={won(d.net)} masked={privacyMasked} /></div>}
+                      {d.income > 0 && <div style={{ color: hc.text }} className='text-[10px]'>+<MaskedValue value={won(d.income)} masked={privacyMasked} /></div>}
+                      {d.expense > 0 && <div style={{ color: hc.text }} className='text-[10px]'>-<MaskedValue value={won(d.expense)} masked={privacyMasked} /></div>}
                     </button>
                   )
                 })}
@@ -346,7 +349,7 @@ export default function Page() {
                     <div key={i} className={theme === 'dark' ? 'rounded-2xl border border-white/[0.05] bg-white/[0.03] p-3' : 'rounded-2xl border border-slate-100 bg-slate-50 p-3'}>
                       <div className='flex items-center justify-between gap-3 text-sm'>
                         <span className={theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}>{CAT_ICON[c.category] || '📌'} {c.category}</span>
-                        <b style={{ color }} className='tabular-nums'>{isIncome ? '+' : '-'}<MaskedValue value={won(c.amount)} /></b>
+                        <b style={{ color }} className='tabular-nums'>{isIncome ? '+' : '-'}<MaskedValue value={won(c.amount)} masked={privacyMasked} /></b>
                       </div>
                       <div className='mt-2 h-2 rounded-full' style={{ background: bg }}>
                         <div style={{ width: `${Math.min(100, c.weight)}%`, height: 8, background: color, borderRadius: 999 }} />
@@ -427,11 +430,11 @@ export default function Page() {
               <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>자산/부채 현황</h3>
               <div className='grid gap-4 xl:grid-cols-2'>
                 <div>
-                  <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>자산 총액 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(bs.assetsTotal || 0)} /></b></div>
+                  <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>자산 총액 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(bs.assetsTotal || 0)} masked={privacyMasked} /></b></div>
                   {(bs.assets || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
                 </div>
                 <div>
-                  <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>부채 총액 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(bs.liabilitiesTotal || 0)} /></b></div>
+                  <div className='mb-2 text-sm text-slate-600 dark:text-slate-400'>부채 총액 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(bs.liabilitiesTotal || 0)} masked={privacyMasked} /></b></div>
                   {(bs.liabilities || []).slice(0, 5).map((x: any, i: number) => <div key={i} className={theme === 'dark' ? 'mb-2 flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'mb-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}><span className='truncate pr-3'>{x.name}</span><b className='tabular-nums text-slate-900 dark:text-slate-100'>{x.weight}%</b></div>)}
                 </div>
               </div>
