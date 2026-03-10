@@ -75,7 +75,7 @@ Response:
 A local watcher script is included at `scripts/banksalad_mail_import.py`.
 
 What it does:
-- searches Gmail for `subject:"정광석님의 뱅크샐러드 엑셀 내보내기 데이터" has:attachment`
+- searches Gmail for `subject:"뱅크샐러드 엑셀 내보내기 데이터" has:attachment`
 - downloads attachments for new matching messages only
 - extracts password-protected ZIPs with password `1234`
 - finds `.xlsx` files

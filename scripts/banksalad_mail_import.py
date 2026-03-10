@@ -16,7 +16,7 @@ RUNTIME_DIR = ROOT / "runtime" / "banksalad-mail-import"
 STATE_FILE = RUNTIME_DIR / "state.json"
 DOWNLOADS_DIR = RUNTIME_DIR / "downloads"
 LOG_DIR = RUNTIME_DIR / "logs"
-DEFAULT_QUERY = 'subject:"정광석님의 뱅크샐러드 엑셀 내보내기 데이터" has:attachment'
+DEFAULT_QUERY = 'subject:"뱅크샐러드 엑셀 내보내기 데이터" has:attachment'
 DEFAULT_API = os.environ.get("BANKSALAD_IMPORT_API", "http://localhost:8000/imports/xlsx-local")
 DEFAULT_PASSWORD = os.environ.get("BANKSALAD_ZIP_PASSWORD", "1234")
 

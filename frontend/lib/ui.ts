@@ -11,7 +11,7 @@ export const API = (() => {
 
 export const owners = [
   { value: 'all', label: '전체' },
-  { value: 'self', label: '광석' },
+  { value: 'self', label: '본인' },
   { value: 'spouse', label: '배우자' },
 ] as const
 

@@ -165,7 +165,7 @@ export default function Page() {
           <div className='space-y-3'>
             <div className={theme === 'dark' ? 'inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300' : 'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-700'}>Family Wealth Dashboard</div>
             <div>
-              <h1 className='m-0 text-2xl font-semibold tracking-tight sm:text-3xl'>광석 재무 대시보드</h1>
+              <h1 className='m-0 text-2xl font-semibold tracking-tight sm:text-3xl'>개인 재무 대시보드</h1>
               <p className={theme === 'dark' ? 'mt-2 max-w-xl text-sm text-slate-300' : 'mt-2 max-w-xl text-sm text-slate-700'}>자산, 부채, 순자산과 이번 달 흐름을 먼저 보여주는 개인 재무 홈.</p>
             </div>
           </div>

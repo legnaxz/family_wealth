@@ -29,7 +29,7 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>BANKSALAD_GMAIL_QUERY</key>
-    <string>subject:&quot;정광석님의 뱅크샐러드 엑셀 내보내기 데이터&quot; has:attachment</string>
+    <string>subject:&quot;뱅크샐러드 엑셀 내보내기 데이터&quot; has:attachment</string>
     <key>BANKSALAD_ZIP_PASSWORD</key>
     <string>1234</string>
     <key>BANKSALAD_IMPORT_API</key>
