@@ -35,6 +35,9 @@ alembic upgrade head
   - Idempotent by `tx_hash` unique key (duplicate re-upload skip)
   - Fallback support: simple `date,type,name,amount` format to valuations
 - Audit log table
+- Owner-scoped asset/liability valuation snapshots
+- Holdings table and holdings API scaffold for stock/crypto expansion
+- Asset/liability category grouping scaffold (`category_group`, `source`)
 
 ## Core API flow
 

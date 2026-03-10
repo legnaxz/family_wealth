@@ -48,6 +48,8 @@ class Asset(Base):
     owner_scope: Mapped[str] = mapped_column(String(20), default="shared", index=True)
     name: Mapped[str] = mapped_column(String(120))
     category: Mapped[str] = mapped_column(String(60), default="other")
+    category_group: Mapped[str] = mapped_column(String(40), default="other", index=True)
+    source: Mapped[str] = mapped_column(String(40), default="manual")
 
 
 class Liability(Base):
@@ -57,6 +59,8 @@ class Liability(Base):
     owner_scope: Mapped[str] = mapped_column(String(20), default="shared", index=True)
     name: Mapped[str] = mapped_column(String(120))
     lender: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    category_group: Mapped[str] = mapped_column(String(40), default="other", index=True)
+    source: Mapped[str] = mapped_column(String(40), default="manual")
 
 
 class Valuation(Base):
@@ -109,6 +113,33 @@ class NetWorthSnapshot(Base):
     assets_total: Mapped[float] = mapped_column(Numeric(18, 2))
     liabilities_total: Mapped[float] = mapped_column(Numeric(18, 2))
     net_worth: Mapped[float] = mapped_column(Numeric(18, 2))
+
+
+class Holding(Base):
+    __tablename__ = "holdings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id"), index=True)
+    owner_scope: Mapped[str] = mapped_column(String(20), default="self", index=True)
+    asset_class: Mapped[str] = mapped_column(String(30), index=True)
+    symbol: Mapped[str] = mapped_column(String(40), index=True)
+    display_name: Mapped[str] = mapped_column(String(120))
+    quantity: Mapped[float] = mapped_column(Numeric(18, 8), default=0)
+    avg_buy_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), default="KRW")
+    source: Mapped[str] = mapped_column(String(40), default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MarketPrice(Base):
+    __tablename__ = "market_prices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(40), index=True)
+    asset_class: Mapped[str] = mapped_column(String(30), index=True)
+    price: Mapped[float] = mapped_column(Numeric(18, 8))
+    currency: Mapped[str] = mapped_column(String(10), default="KRW")
+    source: Mapped[str] = mapped_column(String(40), default="manual")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class AuditLog(Base):

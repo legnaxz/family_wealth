@@ -22,9 +22,11 @@ from .models import (
     Transaction,
     InvitationToken,
     NetWorthSnapshot,
+    Holding,
+    MarketPrice,
     AuditLog,
 )
-from .schemas import UserCreate, LoginIn, TokenOut, HouseholdCreate, AccountCreate, AssetCreate, LiabilityCreate, ValuationCreate
+from .schemas import UserCreate, LoginIn, TokenOut, HouseholdCreate, AccountCreate, AssetCreate, LiabilityCreate, ValuationCreate, HoldingCreate
 from .security import (
     hash_password,
     verify_password,
@@ -55,12 +57,27 @@ def ensure_local_schema_updates(db: Session) -> None:
     statements = [
         "ALTER TABLE transactions ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'self'",
         "ALTER TABLE assets ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'shared'",
+        "ALTER TABLE assets ADD COLUMN category_group VARCHAR(40) DEFAULT 'other'",
+        "ALTER TABLE assets ADD COLUMN source VARCHAR(40) DEFAULT 'manual'",
         "ALTER TABLE liabilities ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'shared'",
+        "ALTER TABLE liabilities ADD COLUMN category_group VARCHAR(40) DEFAULT 'other'",
+        "ALTER TABLE liabilities ADD COLUMN source VARCHAR(40) DEFAULT 'manual'",
         "ALTER TABLE valuations ADD COLUMN owner_scope VARCHAR(20) DEFAULT 'shared'",
         "CREATE INDEX IF NOT EXISTS ix_transactions_owner_scope ON transactions(owner_scope)",
         "CREATE INDEX IF NOT EXISTS ix_assets_owner_scope ON assets(owner_scope)",
+        "CREATE INDEX IF NOT EXISTS ix_assets_category_group ON assets(category_group)",
         "CREATE INDEX IF NOT EXISTS ix_liabilities_owner_scope ON liabilities(owner_scope)",
+        "CREATE INDEX IF NOT EXISTS ix_liabilities_category_group ON liabilities(category_group)",
         "CREATE INDEX IF NOT EXISTS ix_valuations_owner_scope ON valuations(owner_scope)",
+        "CREATE TABLE IF NOT EXISTS holdings (id INTEGER PRIMARY KEY, household_id INTEGER, owner_scope VARCHAR(20) DEFAULT 'self', asset_class VARCHAR(30), symbol VARCHAR(40), display_name VARCHAR(120), quantity NUMERIC(18,8) DEFAULT 0, avg_buy_price NUMERIC(18,4), currency VARCHAR(10) DEFAULT 'KRW', source VARCHAR(40) DEFAULT 'manual', created_at DATETIME, updated_at DATETIME)",
+        "CREATE INDEX IF NOT EXISTS ix_holdings_household_id ON holdings(household_id)",
+        "CREATE INDEX IF NOT EXISTS ix_holdings_owner_scope ON holdings(owner_scope)",
+        "CREATE INDEX IF NOT EXISTS ix_holdings_asset_class ON holdings(asset_class)",
+        "CREATE INDEX IF NOT EXISTS ix_holdings_symbol ON holdings(symbol)",
+        "CREATE TABLE IF NOT EXISTS market_prices (id INTEGER PRIMARY KEY, symbol VARCHAR(40), asset_class VARCHAR(30), price NUMERIC(18,8), currency VARCHAR(10) DEFAULT 'KRW', source VARCHAR(40) DEFAULT 'manual', fetched_at DATETIME)",
+        "CREATE INDEX IF NOT EXISTS ix_market_prices_symbol ON market_prices(symbol)",
+        "CREATE INDEX IF NOT EXISTS ix_market_prices_asset_class ON market_prices(asset_class)",
+        "CREATE INDEX IF NOT EXISTS ix_market_prices_fetched_at ON market_prices(fetched_at)",
     ]
     for stmt in statements:
         try:
@@ -387,6 +404,39 @@ def create_valuation(payload: ValuationCreate, user: User = Depends(get_current_
     audit(db, row.household_id, user.id, "create", "valuation", str(row.id))
     db.commit()
     return {"id": row.id}
+
+
+@app.post("/holdings")
+def create_holding(payload: HoldingCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_household_role(db, payload.household_id, user.id, "member")
+    row = Holding(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    audit(db, row.household_id, user.id, "create", "holding", str(row.id))
+    db.commit()
+    return {"id": row.id}
+
+
+@app.get("/households/{household_id}/holdings")
+def list_holdings(household_id: int, owner_scope: str = "all", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_household_role(db, household_id, user.id, "viewer")
+    scopes = owner_scopes_for_view(owner_scope)
+    rows = db.scalars(select(Holding).where(Holding.household_id == household_id, Holding.owner_scope.in_(scopes)).order_by(Holding.asset_class.asc(), Holding.display_name.asc())).all()
+    return [
+        {
+            "id": r.id,
+            "ownerScope": r.owner_scope,
+            "assetClass": r.asset_class,
+            "symbol": r.symbol,
+            "displayName": r.display_name,
+            "quantity": float(r.quantity),
+            "avgBuyPrice": float(r.avg_buy_price) if r.avg_buy_price is not None else None,
+            "currency": r.currency,
+            "source": r.source,
+        }
+        for r in rows
+    ]
 
 
 @app.post("/imports/xlsx")
