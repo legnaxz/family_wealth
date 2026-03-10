@@ -57,3 +57,10 @@ class HoldingCreate(BaseModel):
     avg_buy_price: float | None = None
     currency: str = "KRW"
     source: str = "manual"
+
+class MarketPriceCreate(BaseModel):
+    symbol: str
+    asset_class: str
+    price: float
+    currency: str = "KRW"
+    source: str = "manual"

@@ -26,7 +26,7 @@ from .models import (
     MarketPrice,
     AuditLog,
 )
-from .schemas import UserCreate, LoginIn, TokenOut, HouseholdCreate, AccountCreate, AssetCreate, LiabilityCreate, ValuationCreate, HoldingCreate
+from .schemas import UserCreate, LoginIn, TokenOut, HouseholdCreate, AccountCreate, AssetCreate, LiabilityCreate, ValuationCreate, HoldingCreate, MarketPriceCreate
 from .security import (
     hash_password,
     verify_password,
@@ -437,6 +437,61 @@ def list_holdings(household_id: int, owner_scope: str = "all", user: User = Depe
         }
         for r in rows
     ]
+
+
+@app.post("/market-prices")
+def create_market_price(payload: MarketPriceCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # temporary global write API for manual latest price input
+    row = MarketPrice(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"id": row.id}
+
+
+@app.get("/market-prices/latest")
+def get_latest_market_prices(symbol: str | None = None, asset_class: str | None = None, db: Session = Depends(get_db)):
+    stmt = select(MarketPrice)
+    if symbol:
+        stmt = stmt.where(MarketPrice.symbol == symbol.upper())
+    if asset_class:
+        stmt = stmt.where(MarketPrice.asset_class == asset_class)
+    rows = db.scalars(stmt.order_by(MarketPrice.fetched_at.desc()).limit(200)).all()
+    out = []
+    seen = set()
+    for r in rows:
+        key = (r.symbol, r.asset_class)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "symbol": r.symbol,
+            "assetClass": r.asset_class,
+            "price": float(r.price),
+            "currency": r.currency,
+            "source": r.source,
+            "fetchedAt": r.fetched_at.isoformat() if r.fetched_at else None,
+        })
+    return out
+
+
+@app.get("/ticker-catalog")
+def ticker_catalog(asset_class: str | None = None):
+    catalog = [
+        {"assetClass": "stock", "symbol": "005930", "displayName": "삼성전자", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "000660", "displayName": "SK하이닉스", "currency": "KRW"},
+        {"assetClass": "stock", "symbol": "AAPL", "displayName": "Apple", "currency": "USD"},
+        {"assetClass": "stock", "symbol": "TSLA", "displayName": "Tesla", "currency": "USD"},
+        {"assetClass": "etf", "symbol": "VOO", "displayName": "Vanguard S&P 500 ETF", "currency": "USD"},
+        {"assetClass": "etf", "symbol": "QQQ", "displayName": "Invesco QQQ", "currency": "USD"},
+        {"assetClass": "crypto", "symbol": "BTC", "displayName": "Bitcoin", "currency": "KRW"},
+        {"assetClass": "crypto", "symbol": "ETH", "displayName": "Ethereum", "currency": "KRW"},
+        {"assetClass": "crypto", "symbol": "SOL", "displayName": "Solana", "currency": "KRW"},
+        {"assetClass": "crypto", "symbol": "XRP", "displayName": "XRP", "currency": "KRW"},
+    ]
+    if asset_class:
+        catalog = [c for c in catalog if c["assetClass"] == asset_class]
+    return catalog
 
 
 @app.post("/imports/xlsx")
