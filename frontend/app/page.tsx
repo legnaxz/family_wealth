@@ -271,6 +271,7 @@ export default function Page() {
         </Card>
       </section>
 
+      {activeTab === 'calendar' && (
       <section className='mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr,1fr]'>
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5 sm:p-6'>
@@ -324,6 +325,8 @@ export default function Page() {
           </CardContent>
         </Card>
       </section>
+
+      )}
 
       {activeTab === 'calendar' ? (
         <section className='grid grid-cols-1 gap-3 xl:grid-cols-[2fr,1fr]'>
