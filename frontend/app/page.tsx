@@ -21,6 +21,7 @@ export default function Page() {
   const [expenseShare, setExpenseShare] = useState<any[]>([])
   const [incomeShare, setIncomeShare] = useState<any[]>([])
   const [holdings, setHoldings] = useState<any[]>([])
+  const [tickerCatalog, setTickerCatalog] = useState<any[]>([])
   const [holdingForm, setHoldingForm] = useState({ assetClass: 'stock', symbol: '', displayName: '', quantity: '', avgBuyPrice: '', currency: 'KRW' })
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
   const [selectedMonth, setSelectedMonth] = useState<string>('')
@@ -61,6 +62,8 @@ export default function Page() {
     for (const h of holdingsSafe) acc.set(h.assetClass, (acc.get(h.assetClass) || 0) + 1)
     return Array.from(acc.entries()).map(([k, v]) => ({ key: k, label: labels[k] || k, count: v }))
   }, [holdingsSafe])
+  const tickerCatalogSafe = Array.isArray(tickerCatalog) ? tickerCatalog : []
+  const filteredTickerCatalog = useMemo(() => tickerCatalogSafe.filter((item: any) => item.assetClass === holdingForm.assetClass), [tickerCatalogSafe, holdingForm.assetClass])
 
   const recentTransactions = useMemo(() => (dayReport?.transactions || []).slice(0, 5), [dayReport])
 
@@ -128,6 +131,12 @@ export default function Page() {
     setHoldings(Array.isArray(j) ? j : [])
   }
 
+  async function loadTickerCatalog() {
+    const r = await fetch(`${API}/ticker-catalog`)
+    const j = await r.json()
+    setTickerCatalog(Array.isArray(j) ? j : [])
+  }
+
   async function submitHolding(e: React.FormEvent) {
     e.preventDefault()
     if (!holdingForm.symbol.trim() || !holdingForm.displayName.trim() || !holdingForm.quantity) return
@@ -179,7 +188,7 @@ export default function Page() {
     await recompute()
   }
 
-  useEffect(() => { bootstrap().then(recompute).catch(console.error) }, [])
+  useEffect(() => { bootstrap().then(recompute).catch(console.error); loadTickerCatalog().catch(console.error) }, [])
   useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()]).catch(console.error) }, [ownerScope])
 
   useEffect(() => {
@@ -440,12 +449,23 @@ export default function Page() {
               <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>보유 투자자산</h3>
               <form onSubmit={submitHolding} className={theme === 'dark' ? 'mb-4 grid gap-2 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3' : 'mb-4 grid gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3'}>
                 <div className='grid grid-cols-2 gap-2'>
-                  <select value={holdingForm.assetClass} onChange={(e) => setHoldingForm((f) => ({ ...f, assetClass: e.target.value }))} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
+                  <select value={holdingForm.assetClass} onChange={(e) => setHoldingForm((f) => ({ ...f, assetClass: e.target.value, symbol: '', displayName: '' }))} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
                     <option value='stock'>주식</option>
                     <option value='etf'>ETF</option>
                     <option value='crypto'>코인</option>
                   </select>
-                  <input value={holdingForm.symbol} onChange={(e) => setHoldingForm((f) => ({ ...f, symbol: e.target.value }))} placeholder='심볼' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                  <select value={holdingForm.symbol} onChange={(e) => {
+                    const picked = filteredTickerCatalog.find((item: any) => item.symbol === e.target.value)
+                    setHoldingForm((f) => ({
+                      ...f,
+                      symbol: e.target.value,
+                      displayName: picked?.displayName || f.displayName,
+                      currency: picked?.currency || f.currency,
+                    }))
+                  }} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
+                    <option value=''>티커 선택</option>
+                    {filteredTickerCatalog.map((item: any) => <option key={`${item.assetClass}-${item.symbol}`} value={item.symbol}>{item.displayName} ({item.symbol})</option>)}
+                  </select>
                 </div>
                 <input value={holdingForm.displayName} onChange={(e) => setHoldingForm((f) => ({ ...f, displayName: e.target.value }))} placeholder='표시 이름' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
                 <div className='grid grid-cols-3 gap-2'>
