@@ -25,6 +25,7 @@ export default function Page() {
   const [marketPrices, setMarketPrices] = useState<any[]>([])
   const [holdingForm, setHoldingForm] = useState({ assetClass: 'stock', symbol: '', displayName: '', quantity: '', avgBuyPrice: '', currency: 'KRW' })
   const [priceForm, setPriceForm] = useState({ symbol: '', assetClass: 'stock', price: '', currency: 'KRW' })
+  const [marketLastUpdated, setMarketLastUpdated] = useState<string>('')
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
   const [selectedMonth, setSelectedMonth] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
@@ -159,8 +160,11 @@ export default function Page() {
     setTickerCatalog(Array.isArray(j) ? j : [])
   }
 
-  async function loadMarketPrices() {
-    await fetch(`${API}/market-prices/refresh-crypto?household_id=${householdId}&${qs()}`, { method: 'POST' })
+  async function loadMarketPrices(options?: { refreshCrypto?: boolean }) {
+    if (options?.refreshCrypto) {
+      await fetch(`${API}/market-prices/refresh-crypto?household_id=${householdId}&${qs()}`, { method: 'POST' })
+      setMarketLastUpdated(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    }
     const r = await fetch(`${API}/market-prices/latest`)
     const j = await r.json()
     setMarketPrices(Array.isArray(j) ? j : [])
@@ -240,8 +244,13 @@ export default function Page() {
     await recompute()
   }
 
-  useEffect(() => { bootstrap().then(recompute).catch(console.error); Promise.all([loadTickerCatalog(), loadMarketPrices()]).catch(console.error) }, [])
-  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings(), loadMarketPrices()]).catch(console.error) }, [ownerScope])
+  useEffect(() => { bootstrap().then(recompute).catch(console.error); loadTickerCatalog().catch(console.error) }, [])
+  useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()]).catch(console.error) }, [ownerScope])
+  useEffect(() => {
+    if (activeTab === 'insights') {
+      loadMarketPrices({ refreshCrypto: true }).catch(console.error)
+    }
+  }, [activeTab, ownerScope])
 
   useEffect(() => {
     if (!monthOptions.length) return
@@ -483,6 +492,10 @@ export default function Page() {
                 <button type='submit' className={theme === 'dark' ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-white/90' : 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800'}>투자자산 추가</button>
               </form>
               <div className='mb-3 text-sm text-slate-600 dark:text-slate-400'>등록된 holdings <b className='text-slate-900 dark:text-slate-100'>{holdingsSafe.length}개</b> · 현재 평가합 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(holdingsCurrentTotal)} masked={privacyMasked} /></b></div>
+              <div className='mb-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400'>
+                <span>최근 시세 갱신: {marketLastUpdated || '미갱신'}</span>
+                <button type='button' onClick={() => loadMarketPrices({ refreshCrypto: true })} className={theme === 'dark' ? 'rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-slate-200 transition hover:bg-white/[0.08]' : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700 transition hover:bg-slate-50'}>시세 새로고침</button>
+              </div>
               <div className='grid gap-2'>
                 {holdingClassSummary.length ? holdingClassSummary.map((item) => (
                   <div key={item.key} className={theme === 'dark' ? 'flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-slate-200' : 'flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700'}>
