@@ -76,8 +76,13 @@ export default function Page() {
     return holdingsSafe.map((h: any) => {
       const latest = latestPriceMap.get(`${h.assetClass}:${h.symbol}`)
       const latestPrice = latest ? Number(latest.price || 0) : null
-      const currentValue = latestPrice != null ? latestPrice * Number(h.quantity || 0) : null
-      return { ...h, latestPrice, currentValue }
+      const quantity = Number(h.quantity || 0)
+      const avgBuyPrice = h.avgBuyPrice != null ? Number(h.avgBuyPrice) : null
+      const currentValue = latestPrice != null ? latestPrice * quantity : null
+      const investedValue = avgBuyPrice != null ? avgBuyPrice * quantity : null
+      const pnlValue = currentValue != null && investedValue != null ? currentValue - investedValue : null
+      const pnlPct = pnlValue != null && investedValue ? (pnlValue / investedValue) * 100 : null
+      return { ...h, latestPrice, currentValue, investedValue, pnlValue, pnlPct }
     })
   }, [holdingsSafe, latestPriceMap])
   const holdingsCurrentTotal = useMemo(() => holdingsValuation.reduce((sum: number, h: any) => sum + (h.currentValue || 0), 0), [holdingsValuation])
@@ -497,20 +502,31 @@ export default function Page() {
                 <button type='submit' className={theme === 'dark' ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-white/90' : 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800'}>현재가 저장</button>
               </form>
               <div className='mt-4 space-y-2'>
-                {holdingsValuation.slice(0, 8).map((h: any) => (
+                {holdingsValuation.slice(0, 8).map((h: any) => {
+                  const positive = (h.pnlValue || 0) >= 0
+                  return (
                   <div key={h.id} className={theme === 'dark' ? 'rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2' : 'rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2'}>
-                    <div className='flex items-center justify-between gap-3'>
+                    <div className='flex items-start justify-between gap-3'>
                       <div>
                         <div className='font-medium text-slate-900 dark:text-slate-100'>{h.displayName}</div>
                         <div className='text-xs text-slate-500 dark:text-slate-400'>{h.assetClass} · {h.symbol}</div>
+                        <div className='mt-2 text-xs text-slate-500 dark:text-slate-400'>
+                          {h.latestPrice != null ? `현재가 ${h.currency} ${Number(h.latestPrice).toLocaleString()}` : '현재가 미등록'}
+                        </div>
                       </div>
                       <div className='text-right text-sm tabular-nums text-slate-900 dark:text-slate-100'>
                         <div>{h.quantity}</div>
-                        <div className='text-xs text-slate-500 dark:text-slate-400'>{h.latestPrice != null ? `현재가 ${h.currency} ${Number(h.latestPrice).toLocaleString()}` : '현재가 미등록'}</div>
+                        <div className='mt-1 text-xs text-slate-500 dark:text-slate-400'>평가 {h.currentValue != null ? `${h.currency} ${Math.round(h.currentValue).toLocaleString()}` : '-'} </div>
+                        <div className={positive ? 'mt-1 text-xs font-semibold text-rose-500 dark:text-rose-400' : 'mt-1 text-xs font-semibold text-blue-600 dark:text-blue-400'}>
+                          {h.pnlValue != null ? `${positive ? '+' : ''}${Math.round(h.pnlValue).toLocaleString()}원` : '-'}
+                        </div>
+                        <div className={positive ? 'text-xs font-semibold text-rose-500 dark:text-rose-400' : 'text-xs font-semibold text-blue-600 dark:text-blue-400'}>
+                          {h.pnlPct != null ? `${positive ? '+' : ''}${h.pnlPct.toFixed(2)}%` : '-'}
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </CardContent>
           </Card>
