@@ -75,12 +75,29 @@ Response:
 A local watcher script is included at `scripts/banksalad_mail_import.py`.
 
 What it does:
-- searches Gmail for `subject:"뱅크샐러드 엑셀 내보내기 데이터" has:attachment`
+- reads local config from `.env` when present
+- searches Gmail using `BANKSALAD_GMAIL_QUERY`
 - downloads attachments for new matching messages only
-- extracts password-protected ZIPs with password `1234`
+- extracts password-protected ZIPs with `BANKSALAD_ZIP_PASSWORD`
 - finds `.xlsx` files
-- posts them to `http://localhost:8000/imports/xlsx-local`
+- posts them to `BANKSALAD_IMPORT_API`
 - keeps processed Gmail message IDs in `runtime/banksalad-mail-import/state.json`
+
+Create your local config:
+
+```bash
+cd family-wealth-mvp
+cp .env.example .env
+```
+
+Example `.env` fields:
+
+```env
+BANKSALAD_GMAIL_QUERY=subject:"<your banksalad export mail subject>" has:attachment
+BANKSALAD_IMPORT_API=http://localhost:8000/imports/xlsx-local
+BANKSALAD_ZIP_PASSWORD=1234
+BANKSALAD_OWNER_SCOPE=self
+```
 
 Run once manually:
 
@@ -98,6 +115,8 @@ python3 scripts/banksalad_mail_import.py --triage --max-results 5
 
 launchd plist template:
 - `infra/com.familywealth.banksalad-mail-import.plist`
+
+If you use launchd, keep the real query/password in your local `.env` or adapt the plist environment values locally before loading it.
 
 Load it on macOS:
 

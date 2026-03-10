@@ -12,11 +12,28 @@ from typing import Any
 from urllib import request
 
 ROOT = Path(__file__).resolve().parents[1]
+ENV_FILE = ROOT / ".env"
 RUNTIME_DIR = ROOT / "runtime" / "banksalad-mail-import"
 STATE_FILE = RUNTIME_DIR / "state.json"
 DOWNLOADS_DIR = RUNTIME_DIR / "downloads"
 LOG_DIR = RUNTIME_DIR / "logs"
-DEFAULT_QUERY = 'subject:"뱅크샐러드 엑셀 내보내기 데이터" has:attachment'
+
+
+def load_dotenv() -> None:
+    if not ENV_FILE.exists():
+        return
+    for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+load_dotenv()
+DEFAULT_QUERY = os.environ.get("BANKSALAD_GMAIL_QUERY", 'subject:"뱅크샐러드 엑셀 내보내기 데이터" has:attachment')
 DEFAULT_API = os.environ.get("BANKSALAD_IMPORT_API", "http://localhost:8000/imports/xlsx-local")
 DEFAULT_PASSWORD = os.environ.get("BANKSALAD_ZIP_PASSWORD", "1234")
 
