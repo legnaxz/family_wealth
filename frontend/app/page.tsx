@@ -18,6 +18,7 @@ export default function Page() {
   const [expenseShare, setExpenseShare] = useState<any[]>([])
   const [incomeShare, setIncomeShare] = useState<any[]>([])
   const [holdings, setHoldings] = useState<any[]>([])
+  const [holdingForm, setHoldingForm] = useState({ assetClass: 'stock', symbol: '', displayName: '', quantity: '', avgBuyPrice: '', currency: 'KRW' })
   const [bs, setBs] = useState<any>({ assets: [], liabilities: [], assetsTotal: 0, liabilitiesTotal: 0 })
   const [selectedMonth, setSelectedMonth] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
@@ -122,6 +123,34 @@ export default function Page() {
     const r = await fetch(`${API}/households/${householdId}/holdings?${qs()}`)
     const j = await r.json()
     setHoldings(Array.isArray(j) ? j : [])
+  }
+
+  async function submitHolding(e: React.FormEvent) {
+    e.preventDefault()
+    if (!holdingForm.symbol.trim() || !holdingForm.displayName.trim() || !holdingForm.quantity) return
+    const payload = {
+      household_id: householdId,
+      owner_scope: ownerScope === 'all' ? 'self' : ownerScope,
+      asset_class: holdingForm.assetClass,
+      symbol: holdingForm.symbol.trim().toUpperCase(),
+      display_name: holdingForm.displayName.trim(),
+      quantity: Number(holdingForm.quantity),
+      avg_buy_price: holdingForm.avgBuyPrice ? Number(holdingForm.avgBuyPrice) : null,
+      currency: holdingForm.currency,
+      source: 'manual',
+    }
+    const r = await fetch(`${API}/holdings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      alert(`holding 저장 실패: ${t}`)
+      return
+    }
+    setHoldingForm({ assetClass: 'stock', symbol: '', displayName: '', quantity: '', avgBuyPrice: '', currency: 'KRW' })
+    await loadHoldings()
   }
 
   async function loadCategoryShare(monthKey?: string) {
@@ -350,6 +379,23 @@ export default function Page() {
           <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
             <CardContent className='p-5'>
               <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>보유 투자자산</h3>
+              <form onSubmit={submitHolding} className={theme === 'dark' ? 'mb-4 grid gap-2 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3' : 'mb-4 grid gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3'}>
+                <div className='grid grid-cols-2 gap-2'>
+                  <select value={holdingForm.assetClass} onChange={(e) => setHoldingForm((f) => ({ ...f, assetClass: e.target.value }))} className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-200' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700'}>
+                    <option value='stock'>주식</option>
+                    <option value='etf'>ETF</option>
+                    <option value='crypto'>코인</option>
+                  </select>
+                  <input value={holdingForm.symbol} onChange={(e) => setHoldingForm((f) => ({ ...f, symbol: e.target.value }))} placeholder='심볼' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                </div>
+                <input value={holdingForm.displayName} onChange={(e) => setHoldingForm((f) => ({ ...f, displayName: e.target.value }))} placeholder='표시 이름' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                <div className='grid grid-cols-3 gap-2'>
+                  <input value={holdingForm.quantity} onChange={(e) => setHoldingForm((f) => ({ ...f, quantity: e.target.value }))} placeholder='수량' inputMode='decimal' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                  <input value={holdingForm.avgBuyPrice} onChange={(e) => setHoldingForm((f) => ({ ...f, avgBuyPrice: e.target.value }))} placeholder='평단가' inputMode='decimal' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                  <input value={holdingForm.currency} onChange={(e) => setHoldingForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))} placeholder='통화' className={theme === 'dark' ? 'rounded-xl border border-white/[0.06] bg-[#0f141c] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500' : 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400'} />
+                </div>
+                <button type='submit' className={theme === 'dark' ? 'rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-white/90' : 'rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800'}>투자자산 추가</button>
+              </form>
               <div className='mb-3 text-sm text-slate-600 dark:text-slate-400'>등록된 holdings <b className='text-slate-900 dark:text-slate-100'>{holdingsSafe.length}개</b></div>
               <div className='grid gap-2'>
                 {holdingClassSummary.length ? holdingClassSummary.map((item) => (
