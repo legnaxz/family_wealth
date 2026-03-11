@@ -477,25 +477,17 @@ export default function Page() {
           <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)] xl:col-span-2' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] xl:col-span-2'}>
             <CardContent className='p-5'>
               <div className='mb-3 flex items-center justify-between'>
-                <h3 className='text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>재무 흐름 그래프</h3>
-                <div className='flex flex-wrap gap-2 text-[11px]'>
-                  <span className='rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-500'>순자산</span>
-                  <span className='rounded-full bg-violet-500/10 px-2 py-1 text-violet-500'>월 현금흐름</span>
-                  <span className='rounded-full bg-cyan-500/10 px-2 py-1 text-cyan-500'>자산 총액</span>
-                  <span className='rounded-full bg-rose-500/10 px-2 py-1 text-rose-500'>부채 총액</span>
-                </div>
+                <h3 className='text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>월 현금흐름 그래프</h3>
+                <span className='rounded-full bg-violet-500/10 px-2 py-1 text-[11px] text-violet-500'>월 현금흐름</span>
               </div>
               <div style={{ width: '100%', height: 260 }}>
                 <ResponsiveContainer>
-                  <LineChart data={insightsChartData}>
+                  <LineChart data={monthlySafe}>
                     <CartesianGrid strokeDasharray='3 3' stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0'} />
                     <XAxis dataKey='month' tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} minTickGap={24} />
                     <YAxis width={96} tickFormatter={(v) => won(Number(v))} tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} />
                     <Tooltip formatter={(v: any) => v == null ? '-' : won(Number(v))} />
-                    <Line type='monotone' dataKey='netWorth' name='순자산' stroke='#10b981' strokeWidth={2.2} dot={false} />
-                    <Line type='monotone' dataKey='cashflow' name='월 현금흐름' stroke='#8b5cf6' strokeWidth={2} dot={false} />
-                    <Line type='monotone' dataKey='assetsTotal' name='자산 총액' stroke='#06b6d4' strokeWidth={1.8} strokeDasharray='4 4' dot={false} />
-                    <Line type='monotone' dataKey='liabilitiesTotal' name='부채 총액' stroke='#f43f5e' strokeWidth={1.8} strokeDasharray='4 4' dot={false} />
+                    <Line type='monotone' dataKey='cashflow' name='월 현금흐름' stroke='#8b5cf6' strokeWidth={2.4} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
