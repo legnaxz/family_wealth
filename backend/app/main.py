@@ -5,6 +5,7 @@ import secrets
 import os
 import json
 import urllib.request
+import re
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -514,6 +515,33 @@ def ticker_catalog(asset_class: str | None = None):
     if asset_class:
         catalog = [c for c in catalog if c["assetClass"] == asset_class]
     return catalog
+
+
+@app.post("/market-prices/refresh-stocks-kr")
+def refresh_domestic_stock_prices(household_id: int = 1, owner_scope: str = "all", db: Session = Depends(get_db)):
+    scopes = owner_scopes_for_view(owner_scope)
+    rows = db.scalars(select(Holding).where(Holding.household_id == household_id, Holding.owner_scope.in_(scopes), Holding.asset_class == "stock")).all()
+    symbols = sorted({r.symbol.upper() for r in rows if r.symbol and r.symbol.isdigit() and len(r.symbol) == 6})
+    if not symbols:
+        return {"updated": 0, "symbols": []}
+    updated = 0
+    now = datetime.utcnow()
+    for symbol in symbols:
+        url = f"https://finance.naver.com/item/main.naver?code={symbol}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                html = resp.read().decode("euc-kr", "ignore")
+            m = re.search(r'<p class="no_today">.*?<span class="blind">([0-9,]+)</span>', html, re.S)
+            if not m:
+                continue
+            price = float(m.group(1).replace(',', ''))
+            db.add(MarketPrice(symbol=symbol, asset_class="stock", price=price, currency="KRW", source="naver_finance", fetched_at=now))
+            updated += 1
+        except Exception:
+            continue
+    db.commit()
+    return {"updated": updated, "symbols": symbols}
 
 
 @app.post("/market-prices/refresh-crypto")

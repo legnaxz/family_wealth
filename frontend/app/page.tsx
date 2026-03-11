@@ -36,7 +36,7 @@ export default function Page() {
   const dailySafe = Array.isArray(daily) ? daily : []
   const latestNetWorth = useMemo(() => rowsSafe?.[rowsSafe.length - 1]?.netWorth ?? 0, [rowsSafe])
   const latestMonth = useMemo(() => monthlySafe?.[monthlySafe.length - 1] || null, [monthlySafe])
-  const assetsTotal = Number(bs?.assetsTotal || 0)
+  const assetsBaseTotal = Number(bs?.assetsTotal || 0)
   const liabilitiesTotal = Number(bs?.liabilitiesTotal || 0)
   const monthOptions = useMemo(() => monthlySafe.map((m: any) => m.month), [monthlySafe])
   const dailyMap = useMemo(() => {
@@ -87,6 +87,7 @@ export default function Page() {
     })
   }, [holdingsSafe, latestPriceMap])
   const holdingsCurrentTotal = useMemo(() => holdingsValuation.reduce((sum: number, h: any) => sum + (h.currentValue || 0), 0), [holdingsValuation])
+  const assetsTotal = assetsBaseTotal + holdingsCurrentTotal
 
   const recentTransactions = useMemo(() => (dayReport?.transactions || []).slice(0, 5), [dayReport])
 
@@ -160,9 +161,14 @@ export default function Page() {
     setTickerCatalog(Array.isArray(j) ? j : [])
   }
 
-  async function loadMarketPrices(options?: { refreshCrypto?: boolean }) {
+  async function loadMarketPrices(options?: { refreshCrypto?: boolean; refreshDomesticStocks?: boolean }) {
     if (options?.refreshCrypto) {
       await fetch(`${API}/market-prices/refresh-crypto?household_id=${householdId}&${qs()}`, { method: 'POST' })
+    }
+    if (options?.refreshDomesticStocks) {
+      await fetch(`${API}/market-prices/refresh-stocks-kr?household_id=${householdId}&${qs()}`, { method: 'POST' })
+    }
+    if (options?.refreshCrypto || options?.refreshDomesticStocks) {
       setMarketLastUpdated(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
     }
     const r = await fetch(`${API}/market-prices/latest`)
@@ -248,7 +254,7 @@ export default function Page() {
   useEffect(() => { Promise.all([refresh(), loadBalanceSheet(), loadMonthly(), loadHoldings()]).catch(console.error) }, [ownerScope])
   useEffect(() => {
     if (activeTab === 'insights') {
-      loadMarketPrices({ refreshCrypto: true }).catch(console.error)
+      loadMarketPrices({ refreshCrypto: true, refreshDomesticStocks: true }).catch(console.error)
     }
   }, [activeTab, ownerScope])
 
@@ -306,7 +312,7 @@ export default function Page() {
           <CardContent className='p-5'>
             <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>자산 총액</div>
             <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(assetsTotal)} masked={privacyMasked} /></div>
-            <div className='mt-2 text-sm text-emerald-600 dark:text-emerald-400'>보유 자산 기준</div>
+            <div className='mt-2 text-sm text-emerald-600 dark:text-emerald-400'>기본 자산 + 투자자산</div>
           </CardContent>
         </Card>
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
@@ -319,8 +325,8 @@ export default function Page() {
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
           <CardContent className='p-5'>
             <div className='text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400'>순자산</div>
-            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(latestNetWorth)} masked={privacyMasked} /></div>
-            <div className='mt-2 text-sm text-cyan-600 dark:text-cyan-400'>자산 - 부채</div>
+            <div className='mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-[2rem]'><MaskedValue value={won(assetsTotal - liabilitiesTotal)} masked={privacyMasked} /></div>
+            <div className='mt-2 text-sm text-cyan-600 dark:text-cyan-400'>투자자산 반영 순자산</div>
           </CardContent>
         </Card>
         <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)]' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)]'}>
@@ -494,7 +500,7 @@ export default function Page() {
               <div className='mb-3 text-sm text-slate-600 dark:text-slate-400'>등록된 holdings <b className='text-slate-900 dark:text-slate-100'>{holdingsSafe.length}개</b> · 현재 평가합 <b className='text-slate-900 dark:text-slate-100'><MaskedValue value={won(holdingsCurrentTotal)} masked={privacyMasked} /></b></div>
               <div className='mb-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400'>
                 <span>최근 시세 갱신: {marketLastUpdated || '미갱신'}</span>
-                <button type='button' onClick={() => loadMarketPrices({ refreshCrypto: true })} className={theme === 'dark' ? 'rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-slate-200 transition hover:bg-white/[0.08]' : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700 transition hover:bg-slate-50'}>시세 새로고침</button>
+                <button type='button' onClick={() => loadMarketPrices({ refreshCrypto: true, refreshDomesticStocks: true })} className={theme === 'dark' ? 'rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-slate-200 transition hover:bg-white/[0.08]' : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700 transition hover:bg-slate-50'}>시세 새로고침</button>
               </div>
               <div className='grid gap-2'>
                 {holdingClassSummary.length ? holdingClassSummary.map((item) => (
