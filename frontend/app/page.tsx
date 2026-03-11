@@ -89,6 +89,31 @@ export default function Page() {
   const holdingsCurrentTotal = useMemo(() => holdingsValuation.reduce((sum: number, h: any) => sum + (h.currentValue || 0), 0), [holdingsValuation])
   const assetsTotal = assetsBaseTotal + holdingsCurrentTotal
 
+  const insightsChartData = useMemo(() => {
+    const monthMap = new Map<string, any>()
+    for (const m of monthlySafe) {
+      monthMap.set(m.month, {
+        month: m.month,
+        cashflow: Number(m.cashflow || 0),
+        income: Number(m.income || 0),
+        expense: Number(m.expense || 0),
+      })
+    }
+    const netMap = new Map<string, number>()
+    for (const r of rowsSafe) {
+      const month = String(r.date || '').slice(0, 7)
+      if (month) netMap.set(month, Number(r.netWorth || 0))
+    }
+    const months = Array.from(new Set([...monthMap.keys(), ...netMap.keys()])).sort()
+    return months.map((month) => ({
+      month,
+      netWorth: netMap.get(month) ?? null,
+      cashflow: monthMap.get(month)?.cashflow ?? 0,
+      assetsTotal: month === months[months.length - 1] ? assetsTotal : null,
+      liabilitiesTotal: month === months[months.length - 1] ? liabilitiesTotal : null,
+    }))
+  }, [monthlySafe, rowsSafe, assetsTotal, liabilitiesTotal])
+
   const recentTransactions = useMemo(() => (dayReport?.transactions || []).slice(0, 5), [dayReport])
 
   const calendarDays = useMemo(() => {
@@ -451,15 +476,26 @@ export default function Page() {
         <section className='grid grid-cols-1 gap-3 xl:grid-cols-3'>
           <Card className={theme === 'dark' ? 'border-white/[0.05] bg-[#121821] shadow-[0_8px_24px_rgba(0,0,0,0.18)] xl:col-span-2' : 'border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] xl:col-span-2'}>
             <CardContent className='p-5'>
-              <h3 className='mb-3 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>순자산 추이</h3>
-              <div style={{ width: '100%', height: 220 }}>
+              <div className='mb-3 flex items-center justify-between'>
+                <h3 className='text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50'>재무 흐름 그래프</h3>
+                <div className='flex flex-wrap gap-2 text-[11px]'>
+                  <span className='rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-500'>순자산</span>
+                  <span className='rounded-full bg-violet-500/10 px-2 py-1 text-violet-500'>월 현금흐름</span>
+                  <span className='rounded-full bg-cyan-500/10 px-2 py-1 text-cyan-500'>자산 총액</span>
+                  <span className='rounded-full bg-rose-500/10 px-2 py-1 text-rose-500'>부채 총액</span>
+                </div>
+              </div>
+              <div style={{ width: '100%', height: 260 }}>
                 <ResponsiveContainer>
-                  <LineChart data={rowsSafe}>
+                  <LineChart data={insightsChartData}>
                     <CartesianGrid strokeDasharray='3 3' stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0'} />
-                    <XAxis dataKey='date' tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} minTickGap={24} />
-                    <YAxis width={92} tickFormatter={(v) => won(Number(v))} tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} />
-                    <Tooltip formatter={(v: any) => won(Number(v))} />
-                    <Line type='monotone' dataKey='netWorth' stroke='#10b981' strokeWidth={2} dot={false} />
+                    <XAxis dataKey='month' tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} minTickGap={24} />
+                    <YAxis width={96} tickFormatter={(v) => won(Number(v))} tick={{ fontSize: 11, fill: theme === 'dark' ? '#64748b' : '#64748b' }} />
+                    <Tooltip formatter={(v: any) => v == null ? '-' : won(Number(v))} />
+                    <Line type='monotone' dataKey='netWorth' name='순자산' stroke='#10b981' strokeWidth={2.2} dot={false} />
+                    <Line type='monotone' dataKey='cashflow' name='월 현금흐름' stroke='#8b5cf6' strokeWidth={2} dot={false} />
+                    <Line type='monotone' dataKey='assetsTotal' name='자산 총액' stroke='#06b6d4' strokeWidth={1.8} strokeDasharray='4 4' dot={false} />
+                    <Line type='monotone' dataKey='liabilitiesTotal' name='부채 총액' stroke='#f43f5e' strokeWidth={1.8} strokeDasharray='4 4' dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
